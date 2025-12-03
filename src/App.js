@@ -147,6 +147,14 @@ const sendMessage = async (msgInput = input) => {
     hour12: true,
   });
 
+    // 1️⃣ Handle greetings immediately
+  const greetings = ["hi", "hello", "hey", "مرحبا", "اهلا"];
+  if (greetings.includes(userText.toLowerCase())) {
+    setMessages(p => [...p, { role: "user", content: userText, time }, { role: "bot", content: "Hello! I'm Hadi, your virtual assistant at First Finance Qatar. How can I help you today?", time }]);
+    setInput("");
+    return; // stop further processing
+  }
+
   const userMessage = { role: "user", content: userText, time };
   setMessages(p => [...p, userMessage]);
   setInput("");
