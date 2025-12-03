@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { knowledgeBase } from "./knowledgeBase";
 import Fuse from "fuse.js";
+import { interpretUserMessage } from "./gemini";
+
 
 
 export default function App() {
@@ -22,6 +24,27 @@ export default function App() {
   threshold: 0.35,          // 0 = exact match | 1 = anything matches
   includeScore: true,
 };
+const parseEMIData = (text) => {
+  const data = { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 };
+
+  if (/retail/i.test(text)) data.category = "Retail";
+  else if (/corporate/i.test(text)) data.category = "Corporate";
+
+  if (/expat/i.test(text)) data.nationality = "Expat";
+  else if (/qatari/i.test(text)) data.nationality = "Qatari";
+
+  if (/vehicle/i.test(text)) data.product = "Vehicle";
+  // match amounts like "20000", "QAR 20000", etc.
+  const amtMatch = text.match(/(\d{3,})\s*(qar)?/i);
+  if (amtMatch) data.amount = parseInt(amtMatch[1], 10);
+
+  // match tenure like "6 months"
+  const tenureMatch = text.match(/(\d+)\s*(months|month)/i);
+  if (tenureMatch) data.tenureMonths = parseInt(tenureMatch[1], 10);
+
+  return data;
+};
+
 
 const fuse = new Fuse(knowledgeBase, fuseOptions);
 
@@ -48,20 +71,22 @@ const fuse = new Fuse(knowledgeBase, fuseOptions);
   
 
   useEffect(() => {
-    const container = document.querySelector(".messages");
-    if (!container) return;
+  const container = document.querySelector(".messages");
+  if (!container) return;
 
-    const lastBotMessage = container.querySelector(".message.bot:last-child");
-    if (!lastBotMessage) return;
+  // Get last message
+  const lastMessage = container.querySelector(".message:last-child");
+  if (!lastMessage) return;
 
-    lastBotMessage.scrollIntoView({ 
-      behavior: "smooth", 
-      block: "start",
-      inline: "nearest" 
-    });
-
-    setTimeout(() => window.scrollBy(0, -80), 300);
-  }, [messages]);
+  // Scroll behavior
+  if (lastMessage.classList.contains("bot")) {
+    // If it's a bot message, scroll to top of message
+    lastMessage.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    // If it's a user message, scroll to bottom
+    lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+}, [messages]);
 
   // Welcome message
   useEffect(() => {
@@ -99,26 +124,23 @@ const calculateEMI = (principal, months) => {
 };
 
 
-  const matchKnowledgeBase = (text) => {
-    const results = fuse.search(text);
+// Knowledge base matching with Fuse.js
+const matchKnowledgeBase = (text) => {
+  const results = fuse.search(text);
+  if (!results.length) return null;
 
-    if (results.length === 0) return null;
+  const best = results[0];
+  // Only return KB answer if confidence is high enough
+  // Lower score = better match; Fuse score ranges 0 → exact, 1 → no match
+  if (best.score > 0.6) return null;  
+  return best.item.response;
+};
 
-    // best match
-    const best = results[0];
+// Main sendMessage function
+const sendMessage = async (msgInput = input) => {
+  const userText = String(msgInput || "").trim();
+  if (!userText) return;
 
-    // avoid stupid matches
-    if (best.score > 0.45) return null;
-
-    return best.item.response;
-  };
-
-
-const sendMessage = (msgInput = input) => {
-  if (!msgInput.trim()) return;
-
-  const userText = msgInput.trim();
-  const lowerText = userText.toLowerCase();
   const time = new Date().toLocaleTimeString(language === "ar" ? "ar-EG" : "en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -126,146 +148,73 @@ const sendMessage = (msgInput = input) => {
   });
 
   const userMessage = { role: "user", content: userText, time };
+  setMessages(p => [...p, userMessage]);
+  setInput("");
 
-  // ——— 1. POST_CALC HANDLED FIRST — ALWAYS ———
-  if (emiStep === "post_calc") {
-    const kbResp = matchKnowledgeBase(userText);
-    if (kbResp) {
-      setMessages(p => [...p, userMessage, { role: "bot", content: kbResp, time }]);
-      setInput("");
-      return;
-    }
+  // Extract EMI info if EMI flow is active or triggered
+  let newEmiData = { ...emiData };
+  if (emiStep || /emi|calculate/i.test(userText)) {
+    const parsed = parseEMIData(userText);
+    newEmiData = { ...newEmiData, ...parsed };
+    setEmiData(newEmiData);
 
-    const wantsNew = lowerText.includes("new") || lowerText.includes("again") || 
-                     lowerText.includes("another") || lowerText.includes("different") ||
-                     lowerText.includes("جديد") || lowerText.includes("حساب جديد");
+    const missingFields = ["category","nationality","product","amount","tenureMonths"].filter(f => !newEmiData[f]);
+if (missingFields.length === 0) {
+  // All info present → calculate EMI
+  const { emi, total, profitPercent } = calculateEMI(newEmiData.amount, newEmiData.tenureMonths);
 
-    if (wantsNew || lowerText.includes("emi") || lowerText.includes("قسط") || lowerText.includes("حساب")) {
-      setEmiStep("category");
-      setEmiData({ category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 });
-      const resp = language === "ar" ? "هل الطلب كـ **فرد** أم **شركة**؟" : "Are you applying as **Retail** or **Corporate**?";
-      setMessages(p => [...p, userMessage, { role: "bot", content: resp, time }]);
-      setInput("");
-      return;
-    }
+  // Calculate first and last installment dates
+  const today = new Date();
+  const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1); // 1st of next month
+  const lastInstallment = new Date(firstInstallment);
+  lastInstallment.setMonth(lastInstallment.getMonth() + newEmiData.tenureMonths - 1);
 
-    setMessages(p => [...p, userMessage, { role: "bot", content: t.fallback, time }]);
-    setInput("");
-    return;
-  }
+  const formatDate = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
-  // ——— 2. IF WE ARE IN ANY EMI STEP EXCEPT post_calc → CONTINUE FLOW ———
-  if (emiStep) {
-    let botResponse = "";
-    let nextStep = emiStep;
+  const reply = `
+The Preliminary Finance Details for your ${newEmiData.product} finance of ${newEmiData.amount.toFixed(2)} QAR as ${newEmiData.nationality}, over a period of ${newEmiData.tenureMonths} months, are as follows:
 
-    if (emiStep === "category") {
-      if (lowerText.includes("retail") || lowerText.includes("فرد")) {
-        setEmiData(p => ({ ...p, category: "Retail" }));
-        nextStep = "nationality";
-        botResponse = language === "ar" ? "هل أنت **قطري** أم **مقيم**؟" : "Are you a **Qatari** or an **Expat**?";
-      } else if (lowerText.includes("corporate") || lowerText.includes("شركة")) {
-        botResponse = language === "ar" ? "تمويل الشركات عبر الفروع فقط" : "Corporate finance is available at branches only.";
-        nextStep = null;
-      } else {
-        botResponse = language === "ar" ? "الرجاء الرد بـ **فرد** أو **شركة**" : "Please reply **Retail** or **Corporate**";
-      }
-    }
+- Total Payable Amount: ${total.toFixed(2)} QAR
+- Down Payment Amount: 0 QAR
+- Monthly Preliminary Amount: ${emi.toFixed(2)} QAR
+- First Installment Date: ${formatDate(firstInstallment)}
+- Last Installment Date: ${formatDate(lastInstallment)}
 
-    else if (emiStep === "nationality") {
-      if (lowerText.includes("expat") || lowerText.includes("مقيم")) {
-        setEmiData(p => ({ ...p, nationality: "Expat" }));
-        nextStep = "product";
-      } else if (lowerText.includes("qatari") || lowerText.includes("قطري")) {
-        setEmiData(p => ({ ...p, nationality: "Qatari" }));
-        nextStep = "product";
-      } else {
-        botResponse = language === "ar" ? "الرجاء الرد **قطري** أو **مقيم**" : "Please reply **Qatari** or **Expat**";
-      }
-      if (nextStep === "product") {
-        botResponse = language === "ar"
-          ? "**اختر نوع التمويل:**\n\n• مركبة\n• شخصي\n• خدمات\n• سكن"
-          : "**Select finance product:**\n\n• Vehicle\n• Personal\n• Services\n• Housing";
-      }
-    }
+**This is a preliminary calculation only, terms and conditions apply.**
 
-    else if (emiStep === "product") {
-      const map = { vehicle: ["vehicle", "مركبة", "car"], personal: ["personal", "شخصي"], services: ["services", "خدمات"], housing: ["housing", "سكن", "home"] };
-      const chosen = Object.keys(map).find(k => map[k].some(w => lowerText.includes(w)));
-      if (chosen) {
-        setEmiData(p => ({ ...p, product: chosen.charAt(0).toUpperCase() + chosen.slice(1) }));
-        nextStep = "amount";
-        botResponse = language === "ar" ? `كم مبلغ التمويل لـ ${chosen === "vehicle" ? "مركبة" : chosen === "personal" ? "شخصي" : chosen === "services" ? "خدمات" : "سكن"}؟` : `Finance amount for ${chosen}? (in QAR)`;
-      } else {
-        botResponse = language === "ar" ? "اختر: مركبة • شخصي • خدمات • سكن" : "Choose: Vehicle • Personal • Services • Housing";
-      }
-    }
+Would you like help with any of the following?
+- Features or financial info
+- Required documents
+- Preliminary Finance calculation
+- Apply for finance
+`;
 
-    else if (emiStep === "amount") {
-      const amount = parseInt(userText.replace(/[^0-9]/g, ""));
-      if (isNaN(amount) || amount < 5000) {
-        botResponse = language === "ar" ? "الحد الأدنى 5,000 ريال" : "Minimum 5,000 QAR";
-      } else {
-        setEmiData(p => ({ ...p, amount }));
-        nextStep = "tenure";
-        botResponse = language === "ar" ? "كم المدة؟ (مثال: 24 شهر)" : "Tenure? (e.g. 24 months)";
-      }
-    }
-
-else if (emiStep === "tenure") {
-  const months = parseInt(userText) || 0;
-
-  if (months < 1 || months > 48) {
-    botResponse = language === "ar"
-      ? "المدة يجب أن تكون بين 1 و48 شهراً"
-      : "Tenure must be between 1 and 48 months";
-  } else {
-
-    // 1. read amount before state updates
-    const amount = emiData.amount;
-    const tenure = months;
-
-    // 2. update tenure in state
-    setEmiData(p => ({ ...p, tenureMonths: tenure }));
-
-    // 3. calculate EMI using correct amount
-    const { total, emi } = calculateEMI(amount, tenure);
-
-    // 4. switch to post_calc (important!)
-    nextStep = "post_calc";
-
-    // 5. ONLY ONE botResponse — keep it clean
-    botResponse = language === "ar"
-      ? `تفاصيل التمويل:\nمبلغ: ${amount.toLocaleString()} ريال\nمدة: ${tenure} شهر\nإجمالي: ${total.toLocaleString()} ريال\nشهري: ${emi.toFixed(2)} ريال\n\nهل تريد المزايا أو الوثائق؟`
-      : `Preliminary Details:\nAmount: ${amount.toLocaleString()} QAR\nTenure: ${tenure} months\nTotal: ${total.toLocaleString()} QAR\nMonthly: ${emi.toFixed(2)} QAR\n\nNeed features or documents?`;
-  }
+  setMessages(p => [...p, { role: "bot", content: reply, time }]);
+  setEmiStep(null);
+  setEmiData({ category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 });
+  return;
 }
 
-
-    setMessages(p => [...p, userMessage, { role: "bot", content: botResponse, time }]);
-    
-    setEmiStep(nextStep);
-
-
-    setInput("");
-    return;
   }
 
-  // ——— 3. NORMAL FLOW (no emiStep) ———
-  if (lowerText.includes("emi") || lowerText.includes("calculation") || lowerText.includes("قسط") || lowerText.includes("حساب")) {
-    setEmiStep("category");
-    setEmiData({ category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 });
-    const resp = language === "ar" ? "هل الطلب كـ **فرد** أم **شركة**؟" : "Are you applying as **Retail** or **Corporate**?";
-    setMessages(p => [...p, userMessage, { role: "bot", content: resp, time }]);
-    setInput("");
-    return;
+  // Normal flow: knowledge base > Gemini > fallback
+  const kbAnswer = matchKnowledgeBase(userText);
+
+  let geminiText = "";
+  try {
+    const res = await interpretUserMessage(userText);
+    if (typeof res === "string") geminiText = res.trim();
+    else if (typeof res?.interpretation === "string") geminiText = res.interpretation.trim();
+    else if (typeof res?.interpretation?.text === "string") geminiText = res.interpretation.text.trim();
+  } catch (err) {
+    console.error("Error calling Gemini:", err);
   }
 
-  const kb = matchKnowledgeBase(userText);
-  const botResp = kb || t.fallback;
-  setMessages(p => [...p, userMessage, { role: "bot", content: botResp, time }]);
-  setInput("");
+  const botReply = kbAnswer || geminiText || t.fallback;
+  setMessages(p => [...p, { role: "bot", content: botReply, time }]);
 };
+
+
 
 
 
@@ -277,7 +226,7 @@ else if (emiStep === "tenure") {
           <div className="header-top">
             <div className="header-left">
               <div className="avatar">
-                <img src="https://r6.cloud.yellow.ai/minio/uploads/c0c7f15b-0186-4735-9e78-b13885813d6c.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=r6ymblob%2F20251202%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251202T112841Z&X-Amz-Expires=60&X-Amz-SignedHeaders=host&X-Amz-Signature=17d7500d5ce7a01401adc1d4940c5058219154809d27249c35655b81147c0ba8" alt="F" className="avatar-img" />
+                <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/75e38749934537.56086db928f2d.jpg" alt="F" className="avatar-img" />
               </div>
               <div className="header-title">
                 <h1>First Finance</h1>
