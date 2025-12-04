@@ -147,40 +147,102 @@ const sendMessage = async (msgInput = input) => {
     hour12: true,
   });
 
-    // 1️⃣ Handle greetings immediately
-  const greetings = ["hi", "hello", "hey", "مرحبا", "اهلا"];
-  if (greetings.includes(userText.toLowerCase())) {
-    setMessages(p => [...p, { role: "user", content: userText, time }, { role: "bot", content: "Hello! I'm Hadi, your virtual assistant at First Finance Qatar. How can I help you today?", time }]);
-    setInput("");
-    return; // stop further processing
-  }
-
   const userMessage = { role: "user", content: userText, time };
   setMessages(p => [...p, userMessage]);
   setInput("");
 
-  // Extract EMI info if EMI flow is active or triggered
   let newEmiData = { ...emiData };
-  if (emiStep || /emi|calculate/i.test(userText)) {
-    const parsed = parseEMIData(userText);
-    newEmiData = { ...newEmiData, ...parsed };
-    setEmiData(newEmiData);
 
-    const missingFields = ["category","nationality","product","amount","tenureMonths"].filter(f => !newEmiData[f]);
-if (missingFields.length === 0) {
-  // All info present → calculate EMI
-  const { emi, total, profitPercent } = calculateEMI(newEmiData.amount, newEmiData.tenureMonths);
+  // ===== EMI FLOW =====
+  // ===== EMI FLOW =====
+if (emiStep || /emi|calculate/i.test(userText)) {
+  // Handle cancel
+  if (/cancel/i.test(userText)) {
+    setEmiStep(null);
+    setEmiData({ category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 });
+    setMessages(p => [...p, { role: "bot", content: t.cancelEMI, time }]);
+    return;
+  }
 
-  // Calculate first and last installment dates
-  const today = new Date();
-  const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1); // 1st of next month
-  const lastInstallment = new Date(firstInstallment);
-  lastInstallment.setMonth(lastInstallment.getMonth() + newEmiData.tenureMonths - 1);
+  // Start EMI if not already started
+  if (!emiStep) {
+    setEmiStep("category");
+    setMessages(p => [...p, { role: "bot", content: "Please specify whether you want **Retail** or **Corporate** finance.", time }]);
+    return;
+  }
 
-  const formatDate = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  let newEmiData = { ...emiData };
 
-  const reply = `
-The Preliminary Finance Details for your ${newEmiData.product} finance of ${newEmiData.amount.toFixed(2)} QAR as ${newEmiData.nationality}, over a period of ${newEmiData.tenureMonths} months, are as follows:
+  switch (emiStep) {
+    case "category":
+      if (/retail/i.test(userText)) newEmiData.category = "Retail";
+      else if (/corporate/i.test(userText)) newEmiData.category = "Corporate";
+      else {
+        setMessages(p => [...p, { role: "bot", content: "Please enter either **Retail** or **Corporate**.", time }]);
+        return; // stay in category step
+      }
+      setEmiStep("nationality");
+      setMessages(p => [...p, { role: "bot", content: "Are you a **Qatari National** or an **Expat**?", time }]);
+      break;
+
+    case "nationality":
+      if (/expat/i.test(userText)) newEmiData.nationality = "Expat";
+      else if (/qatari/i.test(userText)) newEmiData.nationality = "Qatari";
+      else {
+        setMessages(p => [...p, { role: "bot", content: "Please enter either **Qatari** or **Expat**.", time }]);
+        return; // stay in nationality step
+      }
+      setEmiStep("product");
+      const products = newEmiData.category === "Retail"
+        ? ["Vehicle", "Personal", "Services", "Housing"]
+        : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
+      setMessages(p => [...p, { role: "bot", content: `Please select a finance product:\n${products.join(", ")}`, time }]);
+      break;
+
+    case "product":
+      const productsList = newEmiData.category === "Retail"
+        ? ["Vehicle", "Personal", "Services", "Housing"]
+        : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
+      
+      const selectedProduct = productsList.find(p => p.toLowerCase() === userText.toLowerCase());
+      if (!selectedProduct) {
+        setMessages(p => [...p, { role: "bot", content: `Please select a valid product:\n${productsList.join(", ")}`, time }]);
+        return; // stay in product step
+      }
+      newEmiData.product = selectedProduct;
+      setEmiStep("amount");
+      setMessages(p => [...p, { role: "bot", content: `Please provide the finance amount for your ${newEmiData.product} as ${newEmiData.nationality}.`, time }]);
+      break;
+
+    case "amount":
+      const amt = parseInt(userText.replace(/[^\d]/g, ""), 10);
+      if (!amt || amt <= 0) {
+        setMessages(p => [...p, { role: "bot", content: "Please enter a valid numeric amount.", time }]);
+        return; // stay in amount step
+      }
+      newEmiData.amount = amt;
+      setEmiStep("tenure");
+      setMessages(p => [...p, { role: "bot", content: "Please specify the finance duration in months (1-48).", time }]);
+      break;
+
+    case "tenure":
+      const months = parseInt(userText.replace(/[^\d]/g, ""), 10);
+      if (!months || months <= 0 || months > 48) {
+        setMessages(p => [...p, { role: "bot", content: "Please enter a valid number of months (1-48).", time }]);
+        return; // stay in tenure step
+      }
+      newEmiData.tenureMonths = months;
+
+      const { emi, total } = calculateEMI(newEmiData.amount, newEmiData.tenureMonths);
+      const today = new Date();
+      const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const lastInstallment = new Date(firstInstallment);
+      lastInstallment.setMonth(lastInstallment.getMonth() + newEmiData.tenureMonths - 1);
+
+      const formatDate = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+      const reply = `
+The Preliminary Finance Details for your ${newEmiData.product} finance of ${newEmiData.amount.toFixed(2)} QAR as ${newEmiData.nationality}, over ${newEmiData.tenureMonths} months:
 
 - Total Payable Amount: ${total.toFixed(2)} QAR
 - Down Payment Amount: 0 QAR
@@ -189,23 +251,19 @@ The Preliminary Finance Details for your ${newEmiData.product} finance of ${newE
 - Last Installment Date: ${formatDate(lastInstallment)}
 
 **This is a preliminary calculation only, terms and conditions apply.**
-
-Would you like help with any of the following?
-- Features or financial info
-- Required documents
-- Preliminary Finance calculation
-- Apply for finance
 `;
 
-  setMessages(p => [...p, { role: "bot", content: reply, time }]);
-  setEmiStep(null);
-  setEmiData({ category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 });
-  return;
-}
-
+      setMessages(p => [...p, { role: "bot", content: reply, time }]);
+      setEmiStep(null);
+      newEmiData = { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 };
+      break;
   }
 
-  // Normal flow: knowledge base > Gemini > fallback
+  setEmiData(newEmiData);
+  return; // stop here, don’t process KB/Gemini for EMI flow
+}
+
+  // ===== NORMAL FLOW (KB + Gemini) =====
   const kbAnswer = matchKnowledgeBase(userText);
 
   let geminiText = "";
@@ -221,6 +279,7 @@ Would you like help with any of the following?
   const botReply = kbAnswer || geminiText || t.fallback;
   setMessages(p => [...p, { role: "bot", content: botReply, time }]);
 };
+
 
 
 
