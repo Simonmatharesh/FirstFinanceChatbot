@@ -6,7 +6,9 @@ import Fuse from "fuse.js";
 import { interpretUserMessage } from "./gemini";
 import { sessionMemory } from './sessionMemory';
 import { emiRates, eligibilityRules, requiredDocs } from './config';
-
+import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";
+import { embedContent } from "./embeddingAPI.js";
+import { findBestMatch } from "./semanticSearch.js";
 
 /* ----------  CONFIG  ---------- */
 const fuseOptions = { keys: ["triggers", "response"], threshold: 0.35, includeScore: true };
@@ -93,6 +95,8 @@ export default function App() {
       { role: "faq", content: "", time },
     ]);
   }, [language, t.greeting]);
+
+
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -321,6 +325,8 @@ The Preliminary Finance Details for your ${newEmiData.product} finance of ${newE
       setMessages((m) => [...m, { role: "bot", content: kbAnswer, time }]);
       return;
     }
+    // ----------- EMBEDDINGS / SEMANTIC SEARCH -----------
+
 
     let geminiText = "";
     try {
