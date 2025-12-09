@@ -1,4 +1,4 @@
-// App.js  (411 → ~260 lines, same look, works)
+// App.js  
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { knowledgeBase } from "./knowledgeBase";
@@ -140,7 +140,38 @@ export default function App() {
 
  const lower = userText.toLowerCase();
 const emis = sessionMemory.get('EMIs') || [];
-if (/is this for qatari|expat/i.test(lower) && context.activeFlow !== "EMI") {
+
+// 0️⃣ HIGH PRIORITY: ANY documents request
+
+if (
+  /document|docs|paperwork|papers|مستندات|requirement|required|need(ed)? to (bring|submit|provide)|what should i bring|for approval|approval/i
+    .test(lower)
+) {
+  let nat = sessionMemory.get('nationality');
+  let prod = sessionMemory.get('product');
+
+  const lastEMI = sessionMemory.get('lastEMI');
+  if ((!nat || !prod) && lastEMI) {
+    nat = lastEMI.nationality;
+    prod = lastEMI.product;
+  }
+
+  if (nat && prod) {
+    const docs = nat === 'Qatari'
+      ? `Recent salary certificate, Original ID, Bank statement (3 months), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).`
+      : `Recent salary certificate, Original ID + passport, Bank statement (3 months stamped), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).\nGenerally, your sponsorship/residence must be with the same employer that issues the salary certificate.`;
+
+    return push('bot', `For ${prod.toLowerCase()} financing (${nat}), the required documents are:\n\n${docs}\n\nAll services are **Shariah-compliant**.`);
+  }
+
+  // If nat/prod missing, ask gracefully:
+  return push('bot',
+    `I can list the exact documents, but I need two details:\n• Your nationality (Qatari or Expat)\n• The finance product (Vehicle, Personal, Services, Housing)\n\nPlease share those and I’ll tailor the list.`
+  );
+}
+
+
+if (/\b(is this (emi )?for (qatari|expat)\?)\b/i.test(lower) && context.activeFlow !== "EMI") {
   if (emis.length === 0) return push('bot', "I don't have any EMI calculated yet. Please calculate an EMI first.");
 
   let productMatch = emis[0]; // default to first
@@ -177,17 +208,7 @@ If you need to change any details or perform a new calculation, please specify t
 }
 
 /* =====  4.  ANY docs request  →  use remembered product / nationality  ===== */
-if (/document|required|papers|مستندات/.test(lower)){
-  const nat  = sessionMemory.get('nationality');
-  const prod = sessionMemory.get('product');
-  if (nat && prod){
-    const docs = nat==='Qatari'
-      ? `Recent salary certificate, Original ID, Bank statement (3 months), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).`
-      : `Recent salary certificate, Original ID + passport, Bank statement (3 months stamped), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).  
-Generally, your sponsorship/residence must be with the same employer that issues the salary certificate.`;
-    return push('bot', `For ${prod.toLowerCase()} financing (${nat}), the required documents are:\n\n${docs}\n\nAll services are **Shariah-compliant**.`);
-  }
-}
+
 
 /* =====  5.  “What is the rate for personal loan”  →  use remembered nationality  ===== */
 if (/rate.*personal|personal.*rate|profit.*personal/.test(lower) && sessionMemory.has('nationality')){
