@@ -170,33 +170,47 @@ const sendMessage = async (msgInput = input) => {
 
   // ========== PRIORITY 1: INTENT CLASSIFICATION (Embeddings) ==========
   // Use embeddings to understand what user REALLY wants
-  const intent = await classifyIntent(userText);
-  
-  console.log("🎯 Detected intent:", intent);
+// ========== NEW: EXPECTING LOGIC (PRIORITY 1) ==========
+  const expecting = sessionMemory.getExpecting();
 
-  switch (intent.type) {
-    case "DOCUMENT_REQUEST":
-      return handleDocumentRequest(userText, intent);
-    
-    case "CLARIFICATION":
-      return handleClarification(userText, intent);
-    
-    case "PRODUCT_SWITCH":
-      return handleProductSwitch(userText, intent);
-    
-    case "EMI_QUERY":
-      return handleEMIQuery(userText, intent);
-    
-    case "GENERAL_INFO":
-      return handleGeneralInfo(userText, intent);
-    
-    case "GREETING":
-      return push('bot', "Hello! How can I help you with First Finance today?");
-    
-    default:
-      // Fall through to semantic search + Gemini
-      break;
+  if (expecting) {
+    if (expecting === 'product') {
+      const prod = extractProduct(userText);
+      if (prod) {
+        sessionMemory.set('product', prod);
+        sessionMemory.clearExpecting();
+
+        // Re-run document request with full context
+        return handleDocumentRequest(userText, {
+          type: "DOCUMENT_REQUEST",
+          entities: { product: prod, nationality: sessionMemory.get('nationality') }
+        });
+      }
+    } 
+    else if (expecting === 'nationality') {
+      if (/qatari|qatar/i.test(userText)) {
+        const nat = "Qatari";
+        sessionMemory.set('nationality', nat);
+        sessionMemory.clearExpecting();
+
+        return handleDocumentRequest(userText, {
+          type: "DOCUMENT_REQUEST",
+          entities: { product: sessionMemory.get('product'), nationality: nat }
+        });
+      } 
+      else if (/expat|expatriate/i.test(userText)) {
+        const nat = "Expat";
+        sessionMemory.set('nationality', nat);
+        sessionMemory.clearExpecting();
+
+        return handleDocumentRequest(userText, {
+          type: "DOCUMENT_REQUEST",
+          entities: { product: sessionMemory.get('product'), nationality: nat }
+        });
+      }
+    }
   }
+  // ========== END OF NEW CODE ==========
 
   // ========== PRIORITY 2: SEMANTIC SEARCH (Knowledge Base) ==========
   try {
@@ -230,6 +244,7 @@ const sendMessage = async (msgInput = input) => {
 };
 
 // ==================== INTENT CLASSIFIER ====================
+
 async function classifyIntent(userText) {
   const lower = userText.toLowerCase();
   
@@ -274,6 +289,7 @@ async function classifyIntent(userText) {
   return { type: "GENERAL_INFO", confidence: 0.5 };
 }
 
+
 // ==================== GEMINI INTENT CLASSIFIER ====================
 
 
@@ -303,12 +319,20 @@ function handleDocumentRequest(userText, intent) {
 
   if (nat && prod) {
     const docs = getDocumentList(nat, prod);
+    sessionMemory.clearExpecting(); // Clear expectation
     return push('bot', docs);
   }
 
   const missing = [];
   if (!nat) missing.push("nationality (Qatari or Expat)");
   if (!prod) missing.push("finance product (Vehicle, Personal, Services, or Housing)");
+
+  // Set what we're expecting next
+  if (!prod) {
+    sessionMemory.setExpecting('product');
+  } else if (!nat) {
+    sessionMemory.setExpecting('nationality');
+  }
 
   return push('bot', 
     `To provide the exact document list, please tell me:\n${missing.map(m => `• Your ${m}`).join('\n')}`
