@@ -7,7 +7,7 @@ import { interpretUserMessage } from "./gemini";
 import { sessionMemory } from './sessionMemory';
 import { emiRates, eligibilityRules, requiredDocs } from './config';
 import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";
-import { embedContent } from "./embeddingAPI.js";
+import { embedContent,initEmbedder} from "./embeddingAPI.js";
 import { findBestMatch } from "./semanticSearch.js";
 
 /* ----------  CONFIG  ---------- */
@@ -95,6 +95,10 @@ export default function App() {
       { role: "faq", content: "", time },
     ]);
   }, [language, t.greeting]);
+useEffect(() => {
+  // Initialize embeddings on app load
+  initKB().then(() => console.log("✅ KB embeddings ready!")).catch(err => console.error("KB init failed:", err));
+}, []);
 
 
 
@@ -111,14 +115,27 @@ export default function App() {
     return fn({ nationality: nat, salary: sal, jobDurationMonths: job, age });
   };
 
-  const matchKnowledgeBase = (txt) => {
-    const results = fuse.search(txt);
-    if (!results.length) return null;
-    const best = results[0];
-    if (best.score > 0.6) return null;
-    const raw = best.item.response;
-    return typeof raw === "function" ? runKbFunction(raw, txt) : raw;
-  };
+const matchKnowledgeBase = (txt) => {
+  // Don't match KB if we're in a follow-up conversation about docs
+  const hasNationalityMemory = sessionMemory.has('nationality');
+  const hasProductMemory = sessionMemory.has('product');
+  const isFollowUp = /what about|how about|is this for|documents|docs/i.test(txt);
+  
+  if (hasNationalityMemory && hasProductMemory && isFollowUp) {
+    return null; // Skip KB, let the smarter handlers above deal with it
+  }
+
+  const results = fuse.search(txt);
+  if (!results.length) return null;
+  
+  const best = results[0];
+  
+  // Much stricter threshold
+  if (best.score > 0.4) return null;
+  
+  const raw = best.item.response;
+  return typeof raw === "function" ? runKbFunction(raw, txt) : raw;
+};
 
   /* ----------  EMI FLOW  ---------- */
   const updateContext = (upd) => setContext((c) => ({ ...c, ...upd }));
@@ -129,238 +146,415 @@ export default function App() {
     setMessages((m) => [...m, { role: "bot", content: t.cancelEMI, time }]);
   };
 
-  const sendMessage = async (msgInput = input) => {
-    const userText = String(msgInput || "").trim();
-    if (!userText) return;
+const sendMessage = async (msgInput = input) => {
+  const userText = String(msgInput || "").trim();
+  if (!userText) return;
 
-    const time = now(language);
-    const userMessage = { role: "user", content: userText, time };
-    setMessages((m) => [...m, userMessage]);
-    setInput("");
+  const time = now(language);
+  const userMessage = { role: "user", content: userText, time };
+  setMessages((m) => [...m, userMessage]);
+  setInput("");
 
- const lower = userText.toLowerCase();
-const emis = sessionMemory.get('EMIs') || [];
+  const lower = userText.toLowerCase();
 
-// 0️⃣ HIGH PRIORITY: ANY documents request
+  // ========== PRIORITY 0: EMI FLOW (STRUCTURED - Keep regex) ==========
+  if (context.activeFlow === "EMI") {
+    return handleEMIFlow(userText, time);
+  }
 
-if (
-  /document|docs|paperwork|papers|مستندات|requirement|required|need(ed)? to (bring|submit|provide)|what should i bring|for approval|approval/i
-    .test(lower)
-) {
-  let nat = sessionMemory.get('nationality');
-  let prod = sessionMemory.get('product');
+  // Start EMI calculation if user asks
+  if (/calculate.*emi|emi.*calculation|new.*emi/i.test(lower) && !context.activeFlow) {
+    updateContext({ activeFlow: "EMI", flowStep: "category", emiData: {} });
+    return push('bot', "Please specify whether you want **Retail** or **Corporate** finance.");
+  }
+
+  // ========== PRIORITY 1: INTENT CLASSIFICATION (Embeddings) ==========
+  // Use embeddings to understand what user REALLY wants
+  const intent = await classifyIntent(userText);
+  
+  console.log("🎯 Detected intent:", intent);
+
+  switch (intent.type) {
+    case "DOCUMENT_REQUEST":
+      return handleDocumentRequest(userText, intent);
+    
+    case "CLARIFICATION":
+      return handleClarification(userText, intent);
+    
+    case "PRODUCT_SWITCH":
+      return handleProductSwitch(userText, intent);
+    
+    case "EMI_QUERY":
+      return handleEMIQuery(userText, intent);
+    
+    case "GENERAL_INFO":
+      return handleGeneralInfo(userText, intent);
+    
+    case "GREETING":
+      return push('bot', "Hello! How can I help you with First Finance today?");
+    
+    default:
+      // Fall through to semantic search + Gemini
+      break;
+  }
+
+  // ========== PRIORITY 2: SEMANTIC SEARCH (Knowledge Base) ==========
+  try {
+    await initEmbedder(); // Ensure embedder is ready
+    const userEmbedding = await embedContent(userText);
+    const match = findBestMatch(userEmbedding, 0.75); // Higher threshold = more accurate
+    
+    if (match) {
+      console.log("✅ Semantic match found:", match.triggers[0]);
+      const response = typeof match.response === "function" 
+        ? runKbFunction(match.response, userText)
+        : match.response;
+      return push('bot', response);
+    }
+  } catch (err) {
+    console.error("Embedding search failed:", err);
+  }
+
+  // ========== PRIORITY 3: GEMINI (Complex queries) ==========
+  try {
+    const geminiResponse = await askGemini(userText);
+    if (geminiResponse && geminiResponse.length > 10) {
+      return push('bot', geminiResponse);
+    }
+  } catch (err) {
+    console.error("Gemini failed:", err);
+  }
+
+  // ========== FALLBACK ==========
+  return push('bot', t.fallback);
+};
+
+// ==================== INTENT CLASSIFIER ====================
+async function classifyIntent(userText) {
+  const lower = userText.toLowerCase();
+  
+  // High-confidence patterns
+  if (/hi|hello|hey|good morning|good evening|what can you (help|do)/i.test(userText)) {
+    return { type: "GREETING", confidence: 1.0 };
+  }
+  
+  if (/document|docs|required|paperwork|what.*bring|what.*need|approval/i.test(lower)) {
+    return { 
+      type: "DOCUMENT_REQUEST", 
+      confidence: 0.9,
+      entities: {
+        nationality: extractNationality(userText),
+        product: extractProduct(userText)
+      }
+    };
+  }
+  
+  if (/is (this|it|that) (for|about)/i.test(lower)) {
+    return { type: "CLARIFICATION", confidence: 0.95 };
+  }
+  
+  if (/what about|how about/i.test(lower)) {
+    return { 
+      type: "PRODUCT_SWITCH", 
+      confidence: 0.9,
+      entities: { product: extractProduct(userText) }
+    };
+  }
+  
+  if (/emi|instalment|monthly|what.*pay|how much.*month/i.test(lower)) {
+    return { type: "EMI_QUERY", confidence: 0.85 };
+  }
+  
+  // General info queries
+  if (/tell me|what.*you|about|services|options|financing|products|profit|rate|insurance|difference|can.*get|do you offer/i.test(lower)) {
+    return { type: "GENERAL_INFO", confidence: 0.8 };
+  }
+  
+  // Default to general info
+  return { type: "GENERAL_INFO", confidence: 0.5 };
+}
+
+// ==================== GEMINI INTENT CLASSIFIER ====================
+async function classifyWithGemini(userText) {
+  const prompt = `You are a finance chatbot intent classifier. Analyze this user message and return ONLY a JSON object:
+
+User message: "${userText}"
+
+Return format:
+{
+  "type": "DOCUMENT_REQUEST" | "EMI_QUERY" | "GENERAL_INFO" | "GREETING" | "CLARIFICATION" | "PRODUCT_SWITCH",
+  "confidence": 0.0 to 1.0,
+  "entities": {
+    "nationality": "Qatari" | "Expat" | null,
+    "product": "Vehicle" | "Personal" | "Services" | "Housing" | null,
+    "amount": number | null
+  }
+}
+
+Be conservative - if unsure, use "GENERAL_INFO" with low confidence.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    
+    const data = await response.json();
+    const text = data.content[0].text;
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch (err) {
+    console.error("Gemini intent classification failed:", err);
+    return { type: "GENERAL_INFO", confidence: 0.3 };
+  }
+}
+
+// ==================== SMART GEMINI QUERY ====================
+// ==================== SMART GEMINI QUERY ====================
+async function askGemini(userText) {
+  try {
+    // Use your existing server endpoint
+    const res = await interpretUserMessage(userText);
+    return typeof res === "string" ? res : res.interpretation;
+  } catch (err) {
+    console.error("Gemini query failed:", err);
+    return null;
+  }
+}
+
+// ==================== INTENT HANDLERS ====================
+function handleDocumentRequest(userText, intent) {
+  let nat = intent.entities?.nationality || sessionMemory.get('nationality');
+  let prod = intent.entities?.product || sessionMemory.get('product');
 
   const lastEMI = sessionMemory.get('lastEMI');
   if ((!nat || !prod) && lastEMI) {
-    nat = lastEMI.nationality;
-    prod = lastEMI.product;
+    if (!nat) nat = lastEMI.nationality;
+    if (!prod) prod = lastEMI.product;
   }
 
   if (nat && prod) {
-    const docs = nat === 'Qatari'
-      ? `Recent salary certificate, Original ID, Bank statement (3 months), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).`
-      : `Recent salary certificate, Original ID + passport, Bank statement (3 months stamped), Alternative cheques, National address certificate, Price offer to FFC, Inspection report (used).\nGenerally, your sponsorship/residence must be with the same employer that issues the salary certificate.`;
-
-    return push('bot', `For ${prod.toLowerCase()} financing (${nat}), the required documents are:\n\n${docs}\n\nAll services are **Shariah-compliant**.`);
+    const docs = getDocumentList(nat, prod);
+    return push('bot', docs);
   }
 
-  // If nat/prod missing, ask gracefully:
-  return push('bot',
-    `I can list the exact documents, but I need two details:\n• Your nationality (Qatari or Expat)\n• The finance product (Vehicle, Personal, Services, Housing)\n\nPlease share those and I’ll tailor the list.`
+  const missing = [];
+  if (!nat) missing.push("nationality (Qatari or Expat)");
+  if (!prod) missing.push("finance product (Vehicle, Personal, Services, or Housing)");
+
+  return push('bot', 
+    `To provide the exact document list, please tell me:\n${missing.map(m => `• Your ${m}`).join('\n')}`
   );
 }
 
+function handleClarification(userText, intent) {
+  const lastEMI = sessionMemory.get('lastEMI');
+  const nat = sessionMemory.get('nationality');
+  const prod = sessionMemory.get('product');
+  
+  if (lastEMI) {
+    return push('bot', `The ${lastEMI.product} information I shared is for **${lastEMI.nationality}** clients.`);
+  } else if (nat && prod) {
+    return push('bot', `The ${prod} information I shared is for **${nat}** clients.`);
+  } else {
+    return push('bot', `I can provide information for both Qatari and Expat clients. Which applies to you?`);
+  }
+}
 
-if (/\b(is this (emi )?for (qatari|expat)\?)\b/i.test(lower) && context.activeFlow !== "EMI") {
-  if (emis.length === 0) return push('bot', "I don't have any EMI calculated yet. Please calculate an EMI first.");
+function handleProductSwitch(userText, intent) {
+  const newProd = intent.entities?.product || extractProduct(userText);
+  
+  if (newProd && sessionMemory.has('nationality')) {
+    sessionMemory.set('product', newProd);
+    const nat = sessionMemory.get('nationality');
+    const docs = getDocumentList(nat, newProd);
+    return push('bot', docs);
+  }
+  
+  return push('bot', "Which product would you like to know about? (Vehicle, Personal, Services, or Housing)");
+}
 
-  let productMatch = emis[0]; // default to first
-  const productMentioned = ["vehicle", "housing", "travel"].find(p => lower.includes(p));
-  if (productMentioned) {
-    const match = emis.find(e => e.product.toLowerCase() === productMentioned);
-    if (match) productMatch = match;
+function handleEMIQuery(userText, intent) {
+  const lastEMI = sessionMemory.get('lastEMI');
+  
+  if (lastEMI) {
+    return push('bot', `Your ${lastEMI.product} EMI is **${lastEMI.emi.toLocaleString()} QAR/month** over ${lastEMI.months} months.`);
+  }
+  
+  return push('bot', "Would you like me to calculate an EMI for you? Just say 'calculate EMI' to start.");
+}
+
+async function handleGeneralInfo(userText, intent) {
+  // Use Gemini for general questions
+  const response = await askGemini(userText);
+  if (response) {
+    return push('bot', response);
+  }
+  return push('bot', t.fallback);
+}
+
+// ==================== HELPERS ====================
+function extractProduct(text) {
+  if (/vehicle|car/i.test(text)) return "Vehicle";
+  if (/personal/i.test(text)) return "Personal";
+  if (/service/i.test(text)) return "Services";
+  if (/housing|home|property/i.test(text)) return "Housing";
+  return null;
+}
+
+function getDocumentList(nationality, product) {
+  const baseList = nationality === 'Qatari'
+    ? `**Required Documents for ${product} Finance (Qatari):**
+
+1. Recent salary certificate
+2. Original Qatar ID
+3. Bank statement (last 3 months)
+4. Alternative payment cheques
+5. National address certificate
+6. Price offer directed to First Finance Company${product === 'Vehicle' ? '\n7. Vehicle inspection report (for used vehicles)' : ''}
+
+All services are **Shariah-compliant**.`
+    : `**Required Documents for ${product} Finance (Expat):**
+
+1. Recent salary certificate
+2. Original Qatar ID + Passport
+3. Bank statement (last 3 months, bank stamped)
+4. Alternative payment cheques
+5. National address certificate
+6. Price offer directed to First Finance Company${product === 'Vehicle' ? '\n7. Vehicle inspection report (for used vehicles)' : ''}
+
+**Note:** Your sponsorship/residence must typically be with the same employer issuing the salary certificate.
+
+All services are **Shariah-compliant**.`;
+
+  return baseList;
+}
+function handleEMIFlow(userText, time) {
+  // Check for cancel/stop commands
+  if (/cancel|stop|no|never ?mind|no need|forget it|don'?t want|exit|quit/i.test(userText)) {
+    return cancelEMI();
   }
 
-  return push('bot', `Your ${productMatch.product} EMI calculation is for ${productMatch.nationality}.`);
-}
-
-
-/* =====  1.  “same thing but X months”  (highest priority)  ===== */
-// 1. Change months
-if (/(same|change).*month|month.*to/.test(lower) && sessionMemory.has('lastEMI')) {
-  const months = extractMonths(lower) || sessionMemory.get('lastEMI').months;
-  const { amount, nationality, product } = sessionMemory.get('lastEMI');
-  const { emi, total } = calculateEMI(amount, months);
-  sessionMemory.set('lastEMI', { amount, months, nationality, product, emi, total });
-  return push('bot', `Updated EMI for ${product} (${nationality}) over ${months} months: ${emi} QAR/month, Total: ${total} QAR`);
-}
-
-// 2. What was my EMI
-if (/again|was.*emi|emi.*amount|monthly.*amount/.test(lower) && sessionMemory.has('lastEMI')) {
-  const { emi, product } = sessionMemory.get('lastEMI');
-  return push('bot', `Your monthly EMI for ${product} is **${emi.toLocaleString()} QAR**.`);
-}
-/* =====  3.  “I need to calculate EMI”  (but we already have one)  ===== */
-if (/calculate.*emi|new.*emi/.test(lower) && sessionMemory.has('lastEMI')){
-  const { product } = sessionMemory.get('lastEMI');
-  return push('bot', `I have already calculated the EMI for your ${product.toLowerCase()} finance.  
-If you need to change any details or perform a new calculation, please specify the details you would like to update.`);
-}
-
-/* =====  4.  ANY docs request  →  use remembered product / nationality  ===== */
-
-
-/* =====  5.  “What is the rate for personal loan”  →  use remembered nationality  ===== */
-if (/rate.*personal|personal.*rate|profit.*personal/.test(lower) && sessionMemory.has('nationality')){
-  const nat = sessionMemory.get('nationality');
-  const max = nat==='Qatari' ? 2_000_000 : 200_000;
-  const ratio = nat==='Qatari' ? 75 : 50;
-  return push('bot', `Personal-finance profit rate is **variable**; the maximum limit is ${max.toLocaleString()} QAR for ${nat} clients, with a debt-burden ratio of ≤ ${ratio} %.  
-Would you like me to calculate a preliminary instalment?`);
-}
-
-/* ----------  end SMART REPLIES  ---------- */
-
-    /* ----------  EMI CONTEXT  ---------- */
-    if (context.activeFlow === "EMI" || /emi|calculate/i.test(userText)) {
-      const strongOffTopic = /document|doc|required|list|paperwork|salary|certificate|noc|branch|location|hour|timing|contact|rate|interest|profit|fee|eligibility|criteria|apply|process|how|card|account|insurance|refinance/i.test(userText);
-      if (strongOffTopic && context.activeFlow === "EMI") {
-        updateContext({ activeFlow: null, flowStep: null, emiData: { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 } });
-        setMessages((m) => [...m, { role: "bot", content: `Got it! I've cancelled the EMI calculation.\n\nHow can I help you with "${userText}"?`, time }]);
-        return;
+  let newEmiData = { ...context.emiData };
+  
+  switch (context.flowStep) {
+    case "category":
+      if (/retail/i.test(userText)) newEmiData.category = "Retail";
+      else if (/corporate/i.test(userText)) newEmiData.category = "Corporate";
+      else return setMessages((m) => [...m, { role: "bot", content: "Please enter either **Retail** or **Corporate**.", time }]);
+      updateContext({ flowStep: "nationality", emiData: newEmiData });
+      setMessages((m) => [...m, { role: "bot", content: "Are you a **Qatari National** or an **Expat**?", time }]);
+      return;
+      
+    case "nationality":
+      if (/expat|expatriate/i.test(userText)) {
+        newEmiData.nationality = "Expat";
+      } else if (/qatar|qatari/i.test(userText)) {
+        newEmiData.nationality = "Qatari";
+      } else {
+        return setMessages((m) => [...m, { role: "bot", content: "Please enter either **Qatari** or **Expat**.", time }]);
       }
-      if (/cancel|stop|no|never ?mind|no need|forget it|don'?t want|exit|quit/i.test(userText)) return cancelEMI();
-
-      if (!context.activeFlow) {
-        updateContext({ activeFlow: "EMI", flowStep: "category", emiData: {} });
-        setMessages((m) => [...m, { role: "bot", content: "Please specify whether you want **Retail** or **Corporate** finance.", time }]);
-        return;
-      }
-      let newEmiData = { ...context.emiData };
-
-      const nat = extractNationality(userText);
-      if (nat) newEmiData.nationality = nat;
-
-      const amt = extractAmount(userText);
-      if (amt) newEmiData.amount = amt;
-
-      const months = extractMonths(userText);
-      if (months) newEmiData.tenureMonths = months;
-
-      const ageMatch = userText.match(/\b(\d{2})\s*y/i);
-      if (ageMatch) newEmiData.age = parseInt(ageMatch[1], 10);
-      const { category, nationality, product, amount, tenureMonths, age } = newEmiData;
-
-      if (category && nationality && product && amount && tenureMonths && age) {
-        const { eligible, reason } = checkEligibility(newEmiData);
-        push('bot', eligible
-          ? "You are eligible for this finance product."
-          : `Sorry, you are not eligible: ${reason}`);
-      }
-
-
-      // Save updated context
-      updateContext({ emiData: newEmiData });
-      switch (context.flowStep) {
-        case "category":
-          if (/retail/i.test(userText)) newEmiData.category = "Retail";
-          else if (/corporate/i.test(userText)) newEmiData.category = "Corporate";
-          else return setMessages((m) => [...m, { role: "bot", content: "Please enter either **Retail** or **Corporate**.", time }]);
-          updateContext({ flowStep: "nationality", emiData: newEmiData });
-          setMessages((m) => [...m, { role: "bot", content: "Are you a **Qatari National** or an **Expat**?", time }]);
-          return;
-        case "nationality":
-          if (/expat/i.test(userText)) newEmiData.nationality = "Expat";
-          else if (/qatari/i.test(userText)) newEmiData.nationality = "Qatari";
-          else return setMessages((m) => [...m, { role: "bot", content: "Please enter either **Qatari** or **Expat**.", time }]);
-          updateContext({ flowStep: "product", emiData: newEmiData });
-          const products = newEmiData.category === "Retail" ? ["Vehicle", "Personal", "Services", "Housing"] : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
-          setMessages((m) => [...m, { role: "bot", content: `Please select a finance product:\n${products.join(", ")}`, time }]);
-          return;
-        case "product": {
-          const productsList = newEmiData.category === "Retail" ? ["Vehicle", "Personal", "Services", "Housing"] : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
-          const selectedProduct = productsList.find((p) => p.toLowerCase() === userText.toLowerCase());
-          if (!selectedProduct) return setMessages((m) => [...m, { role: "bot", content: `Please select a valid product:\n${productsList.join(", ")}`, time }]);
-          newEmiData.product = selectedProduct;
-          updateContext({ flowStep: "amount", emiData: newEmiData });
-          setMessages((m) => [...m, { role: "bot", content: `Please provide the finance amount for your ${newEmiData.product} as ${newEmiData.nationality}.`, time }]);
-          return;
-        }
-        case "amount": {
-          const amt = extractAmount(userText);
-          if (!amt || amt <= 0) return setMessages((m) => [...m, { role: "bot", content: "Please enter a valid numeric amount.", time }]);
-          newEmiData.amount = amt;
-          updateContext({ flowStep: "tenure", emiData: newEmiData });
-          setMessages((m) => [...m, { role: "bot", content: "Please specify the finance duration in months (1-48).", time }]);
-          return;
-        }
-        case "tenure": {
-          const months = extractMonths(userText);
-          if (!months || months <= 0 || months > 48) return setMessages((m) => [...m, { role: "bot", content: "Please enter a valid number of months (1-48).", time }]);
-          newEmiData.tenureMonths = months;
-          const { emi, total } = calculateEMI(newEmiData.amount, months);
-
-          // Save to sessionMemory
-          // Save multiple EMIs
-          let emis = sessionMemory.get('EMIs') || [];
-          const existingIndex = emis.findIndex(e => e.product === newEmiData.product);
-          if (existingIndex >= 0) {
-            emis[existingIndex] = { product: newEmiData.product, nationality: newEmiData.nationality, category: newEmiData.category, amount: newEmiData.amount, months, emi, total };
-          } else {
-            emis.push({ product: newEmiData.product, nationality: newEmiData.nationality, category: newEmiData.category, amount: newEmiData.amount, months, emi, total });
-          }
-          sessionMemory.set('EMIs', emis);
-          sessionMemory.set('lastEMI', { ...emis[existingIndex >= 0 ? existingIndex : emis.length - 1] });
-          sessionMemory.set('nationality', emis[existingIndex >= 0 ? existingIndex : emis.length - 1].nationality);
-          sessionMemory.set('product', emis[existingIndex >= 0 ? existingIndex : emis.length - 1].product);
-
-
-
-          const today = new Date();
-          const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-          const lastInstallment = new Date(firstInstallment);
-          lastInstallment.setMonth(lastInstallment.getMonth() + months - 1);
-          const formatDate = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-          const reply = `
-The Preliminary Finance Details for your ${newEmiData.product} finance of ${newEmiData.amount.toLocaleString()} QAR as ${newEmiData.nationality}, over ${months} months:
-
-- Total Payable Amount: ${total.toLocaleString()} QAR
-- Down Payment Amount: 0 QAR
-- Monthly Preliminary Amount: ${emi.toLocaleString()} QAR
-- First Installment Date: ${formatDate(firstInstallment)}
-- Last Installment Date: ${formatDate(lastInstallment)}
-
-**This is a preliminary calculation only, terms and conditions apply.**`;
-          setMessages((m) => [...m, { role: "bot", content: reply, time }]);
-          updateContext({ activeFlow: null, flowStep: null, emiData: { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 } });
-          return;
-        }
-        default:
-          break;
-      }
-    }
-
-    /* ----------  NORMAL KB / GEMINI  ---------- */
-    const kbAnswer = matchKnowledgeBase(userText);
-    if (kbAnswer) {
-      setMessages((m) => [...m, { role: "bot", content: kbAnswer, time }]);
+      updateContext({ flowStep: "product", emiData: newEmiData });
+      const products = newEmiData.category === "Retail" ? ["Vehicle", "Personal", "Services", "Housing"] : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
+      setMessages((m) => [...m, { role: "bot", content: `Please select a finance product:\n${products.join(", ")}`, time }]);
+      return;
+      
+    case "product": {
+      const productsList = newEmiData.category === "Retail" ? ["Vehicle", "Personal", "Services", "Housing"] : ["Corporate Vehicle", "Corporate Equipment", "Corporate Services"];
+      const selectedProduct = productsList.find((p) => p.toLowerCase() === userText.toLowerCase());
+      if (!selectedProduct) return setMessages((m) => [...m, { role: "bot", content: `Please select a valid product:\n${productsList.join(", ")}`, time }]);
+      newEmiData.product = selectedProduct;
+      updateContext({ flowStep: "amount", emiData: newEmiData });
+      setMessages((m) => [...m, { role: "bot", content: `Please provide the finance amount (in QAR) for your ${newEmiData.product}.`, time }]);
       return;
     }
-    // ----------- EMBEDDINGS / SEMANTIC SEARCH -----------
-
-
-    let geminiText = "";
-    try {
-      const res = await interpretUserMessage(userText);
-      if (typeof res === "string") geminiText = res.trim();
-      else if (typeof res?.interpretation === "string") geminiText = res.interpretation.trim();
-      else if (typeof res?.interpretation?.text === "string") geminiText = res.interpretation.text.trim();
-    } catch (err) {
-      console.error("Error calling Gemini:", err);
+    
+    case "amount": {
+      const amt = extractAmount(userText);
+      if (!amt || amt <= 0) return setMessages((m) => [...m, { role: "bot", content: "Please enter a valid numeric amount (e.g., 20000).", time }]);
+      newEmiData.amount = amt;
+      updateContext({ flowStep: "tenure", emiData: newEmiData });
+      setMessages((m) => [...m, { role: "bot", content: "Please specify the finance duration in months (e.g., 12, 24, 36, or 48).", time }]);
+      return;
     }
-    const botReply = geminiText || t.fallback;
-    setMessages((m) => [...m, { role: "bot", content: botReply, time }]);
-  };
+    
+    case "tenure": {
+      let months = null;
+      const monthMatch = userText.match(/(\d+)\s*months?/i);
+      if (monthMatch) {
+        months = parseInt(monthMatch[1], 10);
+      } else {
+        const numMatch = userText.match(/^\d+$/);
+        if (numMatch) {
+          months = parseInt(numMatch[0], 10);
+        }
+      }
+      
+      if (!months || months <= 0 || months > 48) {
+        return setMessages((m) => [...m, { role: "bot", content: "Please enter a valid number of months between 1 and 48 (e.g., 12, 24, 36, or 48).", time }]);
+      }
+      
+      newEmiData.tenureMonths = months;
+      const { emi, total } = calculateEMI(newEmiData.amount, months);
+
+      const emiRecord = {
+        product: newEmiData.product,
+        nationality: newEmiData.nationality,
+        category: newEmiData.category,
+        amount: newEmiData.amount,
+        months,
+        emi,
+        total
+      };
+      
+      let emis = sessionMemory.get('EMIs') || [];
+      const existingIndex = emis.findIndex(e => e.product === newEmiData.product);
+      
+      if (existingIndex >= 0) {
+        emis[existingIndex] = emiRecord;
+      } else {
+        emis.push(emiRecord);
+      }
+      
+      sessionMemory.set('EMIs', emis);
+      sessionMemory.set('lastEMI', emiRecord);
+      sessionMemory.set('nationality', emiRecord.nationality);
+      sessionMemory.set('product', emiRecord.product);
+
+      const today = new Date();
+      const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const lastInstallment = new Date(firstInstallment);
+      lastInstallment.setMonth(lastInstallment.getMonth() + months - 1);
+      const formatDate = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      
+      const reply = `**Preliminary Finance Details for ${newEmiData.product}**
+
+Finance Amount: ${newEmiData.amount.toLocaleString()} QAR
+Nationality: ${newEmiData.nationality}
+Duration: ${months} months
+
+- Total Payable Amount: ${total.toLocaleString()} QAR
+- Down Payment: 0 QAR
+- Monthly Instalment: **${emi.toLocaleString()} QAR**
+- First Instalment: ${formatDate(firstInstallment)}
+- Last Instalment: ${formatDate(lastInstallment)}
+
+*This is a preliminary calculation only. Terms and conditions apply.*`;
+      
+      setMessages((m) => [...m, { role: "bot", content: reply, time }]);
+      updateContext({ activeFlow: null, flowStep: null, emiData: { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 } });
+      return;
+    }
+    
+    default:
+      break;
+  }
+}
 
   /* ----------  RENDER  ---------- */
   return (

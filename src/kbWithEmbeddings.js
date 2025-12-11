@@ -1,4 +1,4 @@
-
+//kb with embeddings 
 import { knowledgeBase } from "./knowledgeBase.js";
 import { embedContent } from "./embeddingAPI.js";
 
