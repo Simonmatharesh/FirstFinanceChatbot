@@ -636,6 +636,31 @@ Local company owned >50% by Qatari nationals.
 
 **Required Documents:**  
 - Depending on type of credit limit and financing requirements. Contact your FFC relationship manager for details.`
+},
+{
+  category : "profit_rates",
+  triggers : [  "profit rate",
+  "profit rates",
+  "profit",
+  "interest rate",
+  "interest",
+  "financing rate",
+  "finance rate",
+  "how much profit",
+  "what's the profit",
+  "how much do I pay",
+  "what is the rate",
+  "profit structure",
+  "murabaha profit",
+  "cost of finance",
+  "profit percentage",
+  "finance charges",
+  "profit margin",
+  "vehicle profit",
+  "personal loan profit",
+  "housing finance profit",
+  "corporate finance profit"],
+  response: "The current profit rates at First Finance Company are determined by a set of credit policy matrix controls. For precise rates, you would need to visit a branch or contact the First Finance Company call center. Please note that all services provided by First Finance Company are Shari'a-compliant financial services."
 }
 
 ];

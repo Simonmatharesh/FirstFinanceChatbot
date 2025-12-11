@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 // Initialize Gemini correctly (new SDK)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIz0");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -137,10 +137,17 @@ app.post("/api/chat", async (req, res) => {
       generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
     });
     const result = await model.generateContent(SYSTEM_PROMPT + message);
-    const botReply = result.response.text().trim();
+    const parts = result.response.candidates?.[0]?.content?.parts || [];
+
+    const botReply = parts
+      .map(p => p.text || "")
+      .join(" ")
+      .trim();
+
 
     console.log("Gemini reply:", botReply);
     res.json({ interpretation: botReply });
+    
 
   } catch (error) {
     console.error("Error:", error.message);

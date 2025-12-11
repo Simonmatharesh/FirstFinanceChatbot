@@ -20,7 +20,7 @@ const text = {
     greeting: "Hi, Welcome to First Finance.\n I am Hadi your virtual assistant.",
     welcome: "I'm here to help with Shariah-compliant financing.",
     placeholder: "Type your message...",
-    fallback: "You can ask about EMI calculation, required documents, finance products, working hours, or contact us.",
+    fallback: "I am not able to get your query, please try rephrasing your query. I can help with queries regarding monthly payment calculations, required documents, finance application and other products.",
     cancelEMI: "Got it! I've cancelled the EMI calculation.\n\nHow else can I help you today?",
     faqButtons: ["EMI Calculation", "Required Documents", "Finance Products", "Work Hours"],
   },
@@ -275,46 +275,9 @@ async function classifyIntent(userText) {
 }
 
 // ==================== GEMINI INTENT CLASSIFIER ====================
-async function classifyWithGemini(userText) {
-  const prompt = `You are a finance chatbot intent classifier. Analyze this user message and return ONLY a JSON object:
 
-User message: "${userText}"
 
-Return format:
-{
-  "type": "DOCUMENT_REQUEST" | "EMI_QUERY" | "GENERAL_INFO" | "GREETING" | "CLARIFICATION" | "PRODUCT_SWITCH",
-  "confidence": 0.0 to 1.0,
-  "entities": {
-    "nationality": "Qatari" | "Expat" | null,
-    "product": "Vehicle" | "Personal" | "Services" | "Housing" | null,
-    "amount": number | null
-  }
-}
 
-Be conservative - if unsure, use "GENERAL_INFO" with low confidence.`;
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-    
-    const data = await response.json();
-    const text = data.content[0].text;
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
-  } catch (err) {
-    console.error("Gemini intent classification failed:", err);
-    return { type: "GENERAL_INFO", confidence: 0.3 };
-  }
-}
-
-// ==================== SMART GEMINI QUERY ====================
 // ==================== SMART GEMINI QUERY ====================
 async function askGemini(userText) {
   try {
