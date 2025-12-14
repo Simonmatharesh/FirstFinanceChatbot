@@ -8,7 +8,7 @@ import { sessionMemory } from './sessionMemory';
 import { emiRates, eligibilityRules, requiredDocs } from './config';
 import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";
 import { embedContent,initEmbedder} from "./embeddingAPI.js";
-import { findBestMatch } from "./semanticSearch.js";
+import { findBestMatch, isFollowUp, extractProduct, extractNationality } from "./semanticSearch.js";
 
 /* ----------  CONFIG  ---------- */
 const fuseOptions = { keys: ["triggers", "response"], threshold: 0.35, includeScore: true };
@@ -46,7 +46,21 @@ const extractMonths = (t) => {
   const m = t.match(/(\d+)\s*months?/i);
   return m ? parseInt(m[1], 10) : null;
 };
-const extractNationality = (t) => (/qatari/i.test(t) ? "Qatari" : "Expat");
+const extractAge = (text) => {
+  const match = text.match(/\b(\d{2})\s*(?:years?|yo|y\.?o\.?)\b/i);
+  return match ? parseInt(match[1], 10) : null;
+};
+
+const extractSalary = (text) => {
+  const match = text.match(/salary.*?(\d{3,})/i) || text.match(/(\d{4,})\s*(?:qar|riyals?)/i);
+  return match ? parseInt(match[1].replace(/\D/g, ""), 10) : null;
+};
+
+const extractTenureYears = (text) => {
+  const match = text.match(/(\d+)\s*years?/i);
+  return match ? parseInt(match[1], 10) * 12 : null;
+};
+
 
 /* ----------  EMI CORE  ---------- */
 const getPayableRate = (months) => 0.047 - (12 - months) * 0.00392;
@@ -55,18 +69,98 @@ const calculateEMI = (principal, months) => {
   return { emi: Math.round((totalPayable / months) * 100) / 100, total: Math.round(totalPayable) };
 };
 
-export const checkEligibility = ({ product, category, nationality, age, salary, jobDuration }) => {
-  const rules = eligibilityRules[product]?.[category]?.[nationality];
-  if (!rules) return { eligible: false, reason: "No rules found" };
 
-  if (rules.minAge && age < rules.minAge) return { eligible: false, reason: `Minimum age is ${rules.minAge}` };
-  if (rules.maxAge && age > rules.maxAge) return { eligible: false, reason: `Maximum age is ${rules.maxAge}` };
-  if (rules.minSalary && salary < rules.minSalary) return { eligible: false, reason: `Minimum salary is ${rules.minSalary} QAR` };
-  if (rules.traineeAllowed === false && jobDuration < 3) return { eligible: false, reason: `Minimum job duration is 3 months` };
+export const checkEligibility = ({ product, nationality, age = 0, tenureMonths = 0, salary = 0, isTrainee = false ,userText = ""}) => {
+  // Normalize product and nationality
+  product = product?.toLowerCase() || "personal";
+  const natKey = nationality === "Expat" ? "Expat" : "Qatari";  // Matches config exactly
 
-  return { eligible: true, reason: "You meet all eligibility criteria" };
+  const rules = eligibilityRules[product]?.[natKey];
+  if (!rules) {
+    return { eligible: false, reasons: ["This product is not available for your nationality profile."] };
+  }
+
+  const reasons = [];
+
+  // Minimum age (always 18 in your config)
+  if (age > 0 && age < 18) {
+    reasons.push(`Minimum age requirement is 18 years (you mentioned ${age} years).`);
+  }
+
+  if (rules.maxAgeEnd && age > 0 && tenureMonths > 0) {
+      const years = Math.ceil(tenureMonths / 12); // convert months → years correctly
+      const ageAtEnd = age + years;
+      if (ageAtEnd > rules.maxAgeEnd) {
+          reasons.push(
+              `Age at the end of the finance period must not exceed ${rules.maxAgeEnd} years (you would be ${ageAtEnd} years old).`
+          );
+      }
+  }
+
+
+
+  // Minimum salary (only for expats in some products)
+  if (rules.minSalary && salary > 0 && salary < rules.minSalary) {
+    reasons.push(`Minimum salary requirement is ${rules.minSalary.toLocaleString()} QAR (you mentioned ${salary.toLocaleString()} QAR).`);
+  }
+
+  // Trainee rules (only defined for vehicle)
+  if (isTrainee || /trainee/i.test(userText)) {
+    if (product === "vehicle") {
+      if (natKey === "Expat" && rules.trainee?.allowed === false) {
+        reasons.push(`Trainees are not eligible for vehicle finance as an expat.`);
+      } else if (natKey === "Qatari" && rules.trainee?.allowed === true) {
+        reasons.push(`Trainees may be eligible with: ${rules.trainee.conditions}.`);
+      }
+    }
+  }
+
+  // Guarantor for expat personal finance
+  if (product === "personal" && natKey === "Expat" && rules.guarantorRequired) {
+    reasons.push(`A Qatari guarantor is required for expats.`);
+  }
+
+  // Down payment for services (expat)
+  if (product === "services" && natKey === "Expat" && rules.downPaymentRequired) {
+    reasons.push(`A minimum ${rules.minDownPaymentPercent}% down payment is required for expats.`);
+  }
+
+  if (reasons.length > 0) {
+    return { eligible: false, reasons };
+  }
+
+  return { eligible: true, reason: "You appear to meet the basic eligibility criteria based on the information provided." };
 };
 
+const compareProducts = (products, nationality, salary = 0, tenureMonths = 0) => {
+  const comparisons = products.map(prod => {
+    const elig = checkEligibility({ product: prod, nationality, salary, tenureMonths });
+    const rules = eligibilityRules[prod.toLowerCase()]?.Retail?.[nationality.toLowerCase()];
+    return {
+      product: prod,
+      eligible: elig.eligible,
+      pros: [
+        `Max Amount: ${rules?.maxAmount.toLocaleString()} QAR`,
+        `Tenure: Up to ${rules?.maxPeriodMonths} months`,
+        `DSR Limit: ${rules?.maxDebtRatio * 100}%`,
+        rules?.guarantorRequired ? '' : 'No guarantor needed',
+        rules?.downPaymentPercent ? `Down Payment: ${rules.downPaymentPercent}%` : 'No down payment'
+      ].filter(Boolean),
+      cons: elig.reasons || (elig.eligible ? [] : ['Ineligible based on profile'])
+    };
+  });
+
+  let response = '**Loan Comparison**\n\n';
+  comparisons.forEach(c => {
+    response += `### ${c.product}\n${c.eligible ? '✅ Eligible' : '❌ Ineligible'}\n**Pros:**\n${c.pros.map(p => `- ${p}`).join('\n')}\n**Cons:**\n${c.cons.map(con => `- ${con}`).join('\n') || 'None major'}\n\n`;
+  });
+
+  // Recommendation
+  const best = comparisons.reduce((prev, curr) => curr.pros.length > prev.pros.length ? curr : prev);
+  response += `**Recommended:** ${best.product} (higher limits/flexibility for your profile).`;
+
+  return response;
+};
 
 /* ----------  COMPONENT  ---------- */
 export default function App() {
@@ -115,6 +209,17 @@ useEffect(() => {
     return fn({ nationality: nat, salary: sal, jobDurationMonths: job, age });
   };
 
+  // Add this state if you don't have it already
+const [kbReady, setKbReady] = useState(false);
+
+// In your useEffect that initializes KB:
+useEffect(() => {
+  initKB().then(() => {
+    console.log("✅ KB embeddings ready!");
+    setKbReady(true);
+  }).catch(err => console.error("KB init failed:", err));
+}, []);
+
 const matchKnowledgeBase = (txt) => {
   // Don't match KB if we're in a follow-up conversation about docs
   const hasNationalityMemory = sessionMemory.has('nationality');
@@ -146,6 +251,7 @@ const matchKnowledgeBase = (txt) => {
     setMessages((m) => [...m, { role: "bot", content: t.cancelEMI, time }]);
   };
 
+
 const sendMessage = async (msgInput = input) => {
   const userText = String(msgInput || "").trim();
   if (!userText) return;
@@ -157,82 +263,162 @@ const sendMessage = async (msgInput = input) => {
 
   const lower = userText.toLowerCase();
 
-  // ========== PRIORITY 0: EMI FLOW (STRUCTURED - Keep regex) ==========
+  // ========== PRIORITY 0: EMI FLOW ==========
   if (context.activeFlow === "EMI") {
     return handleEMIFlow(userText, time);
   }
 
-  // Start EMI calculation if user asks
   if (/calculate.*emi|emi.*calculation|new.*emi/i.test(lower) && !context.activeFlow) {
     updateContext({ activeFlow: "EMI", flowStep: "category", emiData: {} });
     return push('bot', "Please specify whether you want **Retail** or **Corporate** finance.");
   }
 
-  // ========== PRIORITY 1: INTENT CLASSIFICATION (Embeddings) ==========
-  // Use embeddings to understand what user REALLY wants
-// ========== NEW: EXPECTING LOGIC (PRIORITY 1) ==========
+  // ========== PRIORITY 1: EXTRACT CONTEXT FIRST ==========
+  const detectedProduct = extractProduct(userText);
+  const detectedNationality = extractNationality(userText);
+
+  // Update session memory BEFORE follow-up check
+  if (detectedProduct) {
+    sessionMemory.setLastProduct(detectedProduct);
+    console.log("📦 Product detected:", detectedProduct);
+  }
+  if (detectedNationality) {
+    sessionMemory.set('nationality', detectedNationality);
+    console.log("🏳️ Nationality detected:", detectedNationality);
+  }
+
+  // ========== PRIORITY 1.5: ELIGIBILITY QUESTIONS ==========
+const eligibilityKeywords = /can i get|am i eligible|do i qualify|can.*apply|eligible|qualify|age|old|years?|salary/i;
+const hasEligibilityIntent = eligibilityKeywords.test(lower);
+
+if (hasEligibilityIntent) {
+  console.log("🎯 Eligibility question detected");
+
+  const age = extractAge(userText) || 0;
+  const salary = extractSalary(userText) || 0;
+  const tenureMonths = extractMonths(userText) || extractTenureYears(userText) || 0;
+  const isTrainee = /trainee/i.test(userText);
+
+  let product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product') || "personal";
+  let nationality = detectedNationality || sessionMemory.get('nationality') || "Qatari";
+
+  // Inside sendMessage → eligibility block
+  const eligibility = checkEligibility({
+    product,
+    nationality,
+    age,
+    salary,
+    tenureMonths,
+    isTrainee,
+    userText                  // ← added
+  });
+
+  let response = `**Eligibility Check for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality})**\n\n`;
+
+  if (eligibility.eligible) {
+    response += `✅ **Yes, you appear to be eligible!**\n\n${eligibility.reason}\n\n`;
+  } else {
+    response += `❌ **Unfortunately, you may not be eligible based on the details provided.**\n\n`;
+    response += eligibility.reasons.map(r => `• ${r}`).join("\n") + "\n\n";
+    response += `This is an indicative assessment only. Final approval is subject to full documentation and credit review.\nPlease visit any branch or call 4455 9999 for accurate guidance.\n\n`;
+  }
+
+  // Append relevant KB info if available
+  const kbEntry = knowledgeBase.find(k => 
+    k.category.toLowerCase().includes(product.toLowerCase()) && 
+    (k.category.toLowerCase().includes(nationality.toLowerCase()) || k.category.includes("general"))
+  );
+  if (kbEntry && typeof kbEntry.response !== "function") {
+    response += kbEntry.response + "\n\n";
+  }
+
+  response += `All our services are 100% Shariah-compliant.`;
+
+  sessionMemory.set('nationality', nationality);
+  sessionMemory.setLastProduct(product);
+
+  push('bot', response);
+  return; // Stop further processing
+}
+
+  // ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
+  const isFollowUpMsg = isFollowUp(userText);
+  const currentContext = sessionMemory.getContextSummary();
+
+  console.log("🔍 Current context:", currentContext);
+  console.log("❓ Is follow-up?", isFollowUpMsg);
+
+  // Handle follow-up if we have product OR topic in context
+  if (isFollowUpMsg && (currentContext.product || currentContext.topic)) {
+    console.log("🔄 Follow-up detected!");
+    return handleFollowUpQuestion(userText, currentContext);
+  }
+
+  // ========== PRIORITY 3: EXPECTING LOGIC ==========
   const expecting = sessionMemory.getExpecting();
 
-  if (expecting) {
-    if (expecting === 'product') {
-      const prod = extractProduct(userText);
-      if (prod) {
-        sessionMemory.set('product', prod);
-        sessionMemory.clearExpecting();
-
-        // Re-run document request with full context
-        return handleDocumentRequest(userText, {
-          type: "DOCUMENT_REQUEST",
-          entities: { product: prod, nationality: sessionMemory.get('nationality') }
-        });
-      }
-    } 
-    else if (expecting === 'nationality') {
-      if (/qatari|qatar/i.test(userText)) {
-        const nat = "Qatari";
-        sessionMemory.set('nationality', nat);
-        sessionMemory.clearExpecting();
-
-        return handleDocumentRequest(userText, {
-          type: "DOCUMENT_REQUEST",
-          entities: { product: sessionMemory.get('product'), nationality: nat }
-        });
-      } 
-      else if (/expat|expatriate/i.test(userText)) {
-        const nat = "Expat";
-        sessionMemory.set('nationality', nat);
-        sessionMemory.clearExpecting();
-
-        return handleDocumentRequest(userText, {
-          type: "DOCUMENT_REQUEST",
-          entities: { product: sessionMemory.get('product'), nationality: nat }
-        });
-      }
+  if (expecting === 'product') {
+    const prod = extractProduct(userText);
+    if (prod) {
+      sessionMemory.set('product', prod);
+      sessionMemory.setLastProduct(prod);
+      sessionMemory.clearExpecting();
+      return handleDocumentRequest(userText, {
+        type: "DOCUMENT_REQUEST",
+        entities: { product: prod, nationality: sessionMemory.get('nationality') }
+      });
+    }
+  } 
+  else if (expecting === 'nationality') {
+    if (detectedNationality) {
+      sessionMemory.set('nationality', detectedNationality);
+      sessionMemory.clearExpecting();
+      return handleDocumentRequest(userText, {
+        type: "DOCUMENT_REQUEST",
+        entities: { product: sessionMemory.get('product'), nationality: detectedNationality }
+      });
     }
   }
-  // ========== END OF NEW CODE ==========
 
-  // ========== PRIORITY 2: SEMANTIC SEARCH (Knowledge Base) ==========
+  // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
   try {
-    await initEmbedder(); // Ensure embedder is ready
+    await initEmbedder();
     const userEmbedding = await embedContent(userText);
-    const match = findBestMatch(userEmbedding, 0.75); // Higher threshold = more accurate
+    
+    const contextSummary = {
+      topic: sessionMemory.getCurrentTopic(),
+      product: sessionMemory.getLastProduct(),
+      nationality: sessionMemory.get('nationality')
+    };
+
+    const match = findBestMatch(userEmbedding, kbWithEmbeddings, contextSummary, 0.55);
     
     if (match) {
-      console.log("✅ Semantic match found:", match.triggers[0]);
+      console.log("✅ KB match:", match.triggers[0], "Score:", match.score);
+      
+      // Update topic tracking
+      if (match.category) {
+        sessionMemory.setCurrentTopic(match.category);
+      }
+
       const response = typeof match.response === "function" 
         ? runKbFunction(match.response, userText)
         : match.response;
+      
+      // Track conversation
+      sessionMemory.addToHistory(userText, response, match.category);
+      
       return push('bot', response);
     }
   } catch (err) {
     console.error("Embedding search failed:", err);
   }
 
-  // ========== PRIORITY 3: GEMINI (Complex queries) ==========
+  // ========== PRIORITY 5: GEMINI ==========
   try {
     const geminiResponse = await askGemini(userText);
     if (geminiResponse && geminiResponse.length > 10) {
+      sessionMemory.addToHistory(userText, geminiResponse);
       return push('bot', geminiResponse);
     }
   } catch (err) {
@@ -242,6 +428,131 @@ const sendMessage = async (msgInput = input) => {
   // ========== FALLBACK ==========
   return push('bot', t.fallback);
 };
+
+// ========== FIXED FOLLOW-UP HANDLER ==========
+function handleFollowUpQuestion(userText, context) {
+  const { topic, product, nationality } = context;
+  const newNationality = extractNationality(userText);
+  const newProduct = extractProduct(userText);
+
+  console.log("📋 Follow-up handler called with:", { 
+    currentProduct: product, 
+    currentNationality: nationality,
+    currentTopic: topic,
+    newNationality, 
+    newProduct,
+    userText
+  });
+
+  // Case 1: User asks about different nationality for SAME product
+  // Example: User was discussing vehicle finance (expat), now asks "what about qatari"
+  if (newNationality && product && !newProduct) {
+    console.log(`🔀 Switching nationality from ${nationality} to ${newNationality} for ${product}`);
+    
+    sessionMemory.set('nationality', newNationality);
+    
+    // Try to find specific nationality version first
+    const specificCategory = `${product}_finance_${newNationality.toLowerCase()}`;
+    console.log("🔍 Looking for category:", specificCategory);
+    
+    let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
+    
+    // If not found, look for any entry with this product that has nationality in triggers
+    if (!kbEntry) {
+      console.log("⚠️ Specific category not found, searching broader...");
+      kbEntry = knowledgeBase.find(item => 
+        item.category.includes(product.toLowerCase()) &&
+        item.category.includes(newNationality.toLowerCase())
+      );
+    }
+
+    // Last resort: find the product entry and call its response function
+    if (!kbEntry) {
+      console.log("⚠️ Still not found, using product category...");
+      kbEntry = knowledgeBase.find(item => 
+        item.category === `${product.toLowerCase()}_finance` ||
+        item.category.startsWith(`${product.toLowerCase()}_finance`)
+      );
+    }
+
+    if (kbEntry) {
+      console.log("✅ Found KB entry:", kbEntry.category);
+      
+      const response = typeof kbEntry.response === "function"
+        ? kbEntry.response({ 
+            nationality: newNationality, 
+            salary: 0, 
+            jobDurationMonths: 0, 
+            age: 0 
+          })
+        : kbEntry.response;
+      
+      sessionMemory.addToHistory(userText, response, kbEntry.category);
+      sessionMemory.setCurrentTopic(kbEntry.category);
+      return push('bot', response);
+    }
+    
+    console.error("❌ No KB entry found for:", { product, newNationality });
+  }
+
+  // Case 2: User switches to different product (keeps nationality)
+  if (newProduct && newProduct !== product) {
+    console.log(`🔀 Switching product from ${product} to ${newProduct}`);
+    
+    sessionMemory.setLastProduct(newProduct);
+    const useNationality = nationality || "Qatari";
+    
+    const specificCategory = `${newProduct}_finance_${useNationality.toLowerCase()}`;
+    console.log("🔍 Looking for category:", specificCategory);
+    
+    let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
+    
+    if (!kbEntry) {
+      kbEntry = knowledgeBase.find(item => 
+        item.category.includes(newProduct.toLowerCase()) &&
+        item.category.includes(useNationality.toLowerCase())
+      );
+    }
+
+    if (!kbEntry) {
+      kbEntry = knowledgeBase.find(item => 
+        item.category === `${newProduct.toLowerCase()}_finance`
+      );
+    }
+
+    if (kbEntry) {
+      console.log("✅ Found KB entry:", kbEntry.category);
+      
+      const response = typeof kbEntry.response === "function"
+        ? kbEntry.response({ 
+            nationality: useNationality, 
+            salary: 0, 
+            jobDurationMonths: 0, 
+            age: 0 
+          })
+        : kbEntry.response;
+      
+      sessionMemory.addToHistory(userText, response, kbEntry.category);
+      sessionMemory.setCurrentTopic(kbEntry.category);
+      return push('bot', response);
+    }
+  }
+
+  // Fallback: use Gemini with context
+  console.log("⚠️ Follow-up handler couldn't resolve, falling back to Gemini");
+  
+  askGemini(userText).then(response => {
+    if (response) {
+      sessionMemory.addToHistory(userText, response);
+      push('bot', response);
+    } else {
+      push('bot', "Could you please be more specific? What would you like to know?");
+    }
+  }).catch(err => {
+    console.error("Gemini fallback failed:", err);
+    push('bot', "Could you please be more specific? What would you like to know?");
+  });
+}
 
 // ==================== INTENT CLASSIFIER ====================
 
@@ -297,9 +608,21 @@ async function classifyIntent(userText) {
 // ==================== SMART GEMINI QUERY ====================
 async function askGemini(userText) {
   try {
-    // Use your existing server endpoint
-    const res = await interpretUserMessage(userText);
-    return typeof res === "string" ? res : res.interpretation;
+    // Get conversation context
+    const contextSummary = sessionMemory.getContextSummary();
+    
+    // Send context to server
+    const res = await fetch('http://localhost:3001/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message: userText,
+        context: contextSummary  // ✅ Send context to Gemini
+      })
+    });
+    
+    const data = await res.json();
+    return data.interpretation;
   } catch (err) {
     console.error("Gemini query failed:", err);
     return null;

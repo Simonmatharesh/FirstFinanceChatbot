@@ -1,30 +1,162 @@
 // config.js
+
+/* ============================
+   ELIGIBILITY RULES (KB-ALIGNED)
+   ============================ */
+
 export const eligibilityRules = {
   vehicle: {
-    Qatari: { minSalary: 3000, minAge: 18, traineeAllowed: true, minJobMonths: 3 },
-    Expat: { minSalary: 5000, minAge: 18, traineeAllowed: false, minJobMonths: 3 },
+    Qatari: {
+      minAge: 18,
+      maxAgeEnd: 65,
+      minSalary: null, // Not explicitly defined in KB
+      trainee: {
+        allowed: true,
+        conditions: "Guarantor or valid 3-month training contract"
+      },
+      minJobMonths: 3
+    },
+    Expat: {
+      minAge: 18,
+      maxAgeEnd: 60,
+      minSalary: 5000,
+      trainee: {
+        allowed: false
+      },
+      minJobMonths: 3
+    }
   },
+
   personal: {
-    Qatari: { minSalary: 0, minAge: 18 },
-    Expat: { minSalary: 5000, minAge: 18 },
+    Qatari: {
+      minAge: 18,
+      maxAgeEnd: 65,
+      minSalary: null,
+      guarantorRequired: false
+    },
+    Expat: {
+      minAge: 18,
+      maxAgeEnd: 60,
+      minSalary: 5000,
+      guarantorRequired: true
+    }
   },
+
   housing: {
-    Qatari: { minSalary: 0, minAge: 18 },
-    Expat: { minSalary: 0, minAge: 18 },
+    Qatari: {
+      minAge: 18,
+      maxAgeEnd: 65,
+      minSalary: null
+    },
+    Expat: {
+      minAge: 18,
+      maxAgeEnd: 60,
+      minSalary: null
+    }
   },
+
+  services: {
+    Qatari: {
+      minAge: 18,
+      maxAgeEnd: 65,
+      downPaymentRequired: false
+    },
+    Expat: {
+      minAge: 18,
+      maxAgeEnd: 60,
+      downPaymentRequired: true,
+      minDownPaymentPercent: 10
+    }
+  }
 };
 
+/* ============================
+   EMI / PROFIT RATES
+   ============================ */
+/* KB does NOT define exact rates — these are placeholders
+   and SHOULD NOT be shown to users directly */
+
 export const emiRates = {
-  vehicle: { base: 0.045, factor: 0.004 },
-  personal: { base: 0.035, factor: 0.003 },
-  housing: { base: 0.03, factor: 0.002 },
+  vehicle: { base: null },
+  personal: { base: null },
+  housing: { base: null },
+  services: { base: null }
 };
+
+/* ============================
+   REQUIRED DOCUMENTS (KB-EXACT)
+   ============================ */
 
 export const requiredDocs = {
   vehicle: {
-    Qatari: ["Recent salary certificate", "ID", "Bank statement (3 months)", "Alternative cheques", "National address certificate", "Price offer"],
-    Expat: ["Recent salary certificate", "ID + passport", "Bank statement (3 months, stamped)", "Alternative cheques", "National address certificate", "Price offer"],
+    Qatari: [
+      "Recent salary certificate",
+      "Original Qatar ID",
+      "Bank statement (last 3 months)",
+      "Alternative payment cheques",
+      "National address certificate",
+      "Vehicle price offer"
+    ],
+    Expat: [
+      "Recent salary certificate",
+      "Original Qatar ID and Passport",
+      "Bank statement (last 3 months, bank stamped)",
+      "Alternative payment cheques",
+      "National address certificate",
+      "Vehicle price offer"
+    ]
   },
-  personal: { /* similarly */ },
-  housing: { /* similarly */ },
+
+  personal: {
+    Qatari: [
+      "Recent salary certificate",
+      "Original Qatar ID",
+      "Bank statement (last 3 months)",
+      "Alternative payment cheques",
+      "National address certificate"
+    ],
+    Expat: [
+      "Recent salary certificate",
+      "Original Qatar ID and Passport",
+      "Bank statement (last 3 months, bank stamped)",
+      "Alternative payment cheques",
+      "National address certificate",
+      "Qatari guarantor documents"
+    ]
+  },
+
+  housing: {
+    Qatari: [
+      "Recent salary certificate",
+      "Original Qatar ID",
+      "Bank statement (last 6 months)",
+      "Property documents",
+      "National address certificate"
+    ],
+    Expat: [
+      "Recent salary certificate",
+      "Original Qatar ID and Passport",
+      "Bank statement (last 6 months, bank stamped)",
+      "Property documents",
+      "National address certificate"
+    ]
+  },
+
+  services: {
+    Qatari: [
+      "Recent salary certificate",
+      "Original Qatar ID",
+      "Bank statement (last 3 months)",
+      "Service quotation",
+      "National address certificate"
+    ],
+    Expat: [
+      "Recent salary certificate",
+      "Original Qatar ID and Passport",
+      "Bank statement (last 3 months, bank stamped)",
+      "Service quotation",
+      "National address certificate",
+      "Minimum 10% down payment proof"
+    ]
+  }
 };

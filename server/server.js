@@ -112,31 +112,59 @@ Never repeat the same question (“which product?”) if the user already answer
 User message: `;
 
 app.post("/api/chat", async (req, res) => {
-  const { message } = req.body;
+  const { message, context } = req.body; // Accept context from frontend
 
   if (!message?.trim()) {
     return res.json({ interpretation: "Please type a message." });
   }
 
   console.log("User:", message);
+  console.log("Context:", context);
 
   try {
     // 1️⃣ Generate embedding for the user message
     const userEmbedding = await embedText(message);
 
-    // 2️⃣ Find best match in KB
-    const bestMatch = findBestMatch(userEmbedding);
+    // 2️⃣ Find best match in KB with context awareness
+    const bestMatch = findBestMatchWithContext(userEmbedding, context);
     if (bestMatch) {
-      console.log("KB match:", bestMatch.response);
-      return res.json({ interpretation: bestMatch.response });
+      console.log("KB match:", bestMatch.triggers[0]);
+      
+      // Handle dynamic responses
+      const response = typeof bestMatch.response === "function" 
+        ? bestMatch.response({ 
+            nationality: context?.nationality || "Qatari", 
+            salary: 0, 
+            jobDurationMonths: 0, 
+            age: 0 
+          })
+        : bestMatch.response;
+      
+      return res.json({ interpretation: response });
     }
 
-    // 3️⃣ Fallback to Gemini
+    // 3️⃣ Build context-aware prompt for Gemini
+    let contextPrompt = SYSTEM_PROMPT + message;
+    
+    if (context) {
+      contextPrompt = `${SYSTEM_PROMPT}
+
+**CONVERSATION CONTEXT:**
+${context.topic ? `- Current topic: ${context.topic}` : ''}
+${context.product ? `- Last product discussed: ${context.product}` : ''}
+${context.nationality ? `- User nationality: ${context.nationality}` : ''}
+${context.recentMessages ? `- Recent conversation:\n${context.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+
+User message: ${message}`;
+    }
+
+    // 4️⃣ Ask Gemini with context
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
     });
-    const result = await model.generateContent(SYSTEM_PROMPT + message);
+    
+    const result = await model.generateContent(contextPrompt);
     const parts = result.response.candidates?.[0]?.content?.parts || [];
 
     const botReply = parts
@@ -144,16 +172,49 @@ app.post("/api/chat", async (req, res) => {
       .join(" ")
       .trim();
 
-
     console.log("Gemini reply:", botReply);
     res.json({ interpretation: botReply });
-    
 
   } catch (error) {
     console.error("Error:", error.message);
     res.json({ interpretation: "Sorry, I'm having trouble right now. Please try again." });
   }
 });
+
+// Helper: Find best match with context boosting
+function findBestMatchWithContext(userEmbedding, context, threshold = 0.5) {
+  let best = null;
+  let highestScore = -1;
+
+  for (const item of kbWithEmbeddings) {
+    if (!item.embedding || !Array.isArray(item.embedding)) continue;
+
+    let score = cosineSimilarity(userEmbedding, item.embedding);
+
+    // Boost score if item matches current context
+    if (context?.topic && item.category?.includes(context.topic)) {
+      score += 0.15;
+    }
+
+    if (context?.product && item.category?.includes(context.product)) {
+      score += 0.12;
+    }
+
+    // Boost nationality-specific matches
+    if (context?.nationality === "Qatari" && item.category?.includes("qatari")) {
+      score += 0.1;
+    } else if (context?.nationality === "Expat" && item.category?.includes("expat")) {
+      score += 0.1;
+    }
+
+    if (score > highestScore) {
+      highestScore = score;
+      best = item;
+    }
+  }
+
+  return highestScore >= threshold ? best : null;
+}
 
 let embedder = null;
 let kbWithEmbeddings = [];
