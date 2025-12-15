@@ -288,65 +288,178 @@ const sendMessage = async (msgInput = input) => {
   }
 
   // ========== PRIORITY 1.5: ELIGIBILITY QUESTIONS ==========
-const eligibilityKeywords = /can i get|am i eligible|do i qualify|can.*apply|eligible|qualify|age|old|years?|salary/i;
-const hasEligibilityIntent = eligibilityKeywords.test(lower);
-
-if (hasEligibilityIntent) {
-  console.log("🎯 Eligibility question detected");
-
-  const age = extractAge(userText) || 0;
-  const salary = extractSalary(userText) || 0;
-  const tenureMonths = extractMonths(userText) || extractTenureYears(userText) || 0;
-  const isTrainee = /trainee/i.test(userText);
-
-  let product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product') || "personal";
-  let nationality = detectedNationality || sessionMemory.get('nationality') || "Qatari";
-
-  // Inside sendMessage → eligibility block
-  const eligibility = checkEligibility({
-    product,
-    nationality,
-    age,
-    salary,
-    tenureMonths,
-    isTrainee,
-    userText                  // ← added
-  });
-
-  let response = `**Eligibility Check for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality})**\n\n`;
-
-  if (eligibility.eligible) {
-    response += `✅ **Yes, you appear to be eligible!**\n\n${eligibility.reason}\n\n`;
-  } else {
-    response += `❌ **Unfortunately, you may not be eligible based on the details provided.**\n\n`;
-    response += eligibility.reasons.map(r => `• ${r}`).join("\n") + "\n\n";
-    response += `This is an indicative assessment only. Final approval is subject to full documentation and credit review.\nPlease visit any branch or call 4455 9999 for accurate guidance.\n\n`;
+  if (/maximum|max|minimum|min|how much.*can|what.*age|age.*limit|what's.*age|whats.*age/i.test(lower)) {
+    console.log("📊 Specific info question detected");
+    
+    const product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product');
+    const nationality = detectedNationality || sessionMemory.get('nationality');
+    
+    // Age questions
+    if (/age.*limit|maximum.*age|max.*age|what.*age|age.*requirement/i.test(lower)) {
+      if (!product) {
+        return push('bot', `**Age Requirements:**\n\n**Qatari:**\n• Vehicle: 18-65 years\n• Personal: 18-65 years\n• Housing: 18-75 years\n• Services: 18-65 years\n\n**Expat:**\n• Vehicle: 18-60 years\n• Personal: 18-60 years\n• Housing: 18-60 years\n• Services: 18-60 years\n\nWhich product are you asking about?`);
+      }
+      
+      const ages = {
+        vehicle: { Qatari: "18-65 years", Expat: "18-60 years" },
+        personal: { Qatari: "18-65 years", Expat: "18-60 years" },
+        housing: { Qatari: "18-75 years", Expat: "18-60 years" },
+        services: { Qatari: "18-65 years", Expat: "18-60 years" }
+      };
+      
+      const prodLower = product.toLowerCase();
+      if (nationality) {
+        return push('bot', `**Maximum age for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality}):** ${ages[prodLower]?.[nationality]}\n\nAll services are 100% Shariah-compliant.`);
+      } else {
+        return push('bot', `**Age Requirements for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance:**\n\n• Qatari: ${ages[prodLower]?.Qatari}\n• Expat: ${ages[prodLower]?.Expat}\n\nAre you Qatari or Expat?`);
+      }
+    }
+    
+    // Maximum amount questions
+    if (/maximum|max.*amount|max.*finance|how much.*get|finance.*limit/i.test(lower)) {
+      if (!product) {
+        return push('bot', `**Maximum Finance Amounts:**\n\n**Qatari:**\n• Vehicle: 2,000,000 QAR\n• Personal: 2,000,000 QAR\n• Housing: Based on property value\n• Services: 2,000,000 QAR\n\n**Expat:**\n• Vehicle: 400,000 QAR\n• Personal: 200,000 QAR\n• Housing: Based on property value\n• Services: Varies\n\nWhich product interests you?`);
+      }
+      
+      const amounts = {
+        vehicle: { Qatari: "2,000,000 QAR", Expat: "400,000 QAR" },
+        personal: { Qatari: "2,000,000 QAR", Expat: "200,000 QAR" },
+        housing: { Qatari: "Based on property value (30% down)", Expat: "Based on property value (30% down)" },
+        services: { Qatari: "2,000,000 QAR", Expat: "Varies by service" }
+      };
+      
+      const prodLower = product.toLowerCase();
+      if (nationality) {
+        return push('bot', `**Maximum ${product.charAt(0).toUpperCase() + product.slice(1)} Finance for ${nationality}:** ${amounts[prodLower]?.[nationality]}\n\nAll services are 100% Shariah-compliant.`);
+      } else {
+        return push('bot', `**Maximum ${product.charAt(0).toUpperCase() + product.slice(1)} Finance:**\n\n• Qatari: ${amounts[prodLower]?.Qatari}\n• Expat: ${amounts[prodLower]?.Expat}\n\nAre you Qatari or Expat?`);
+      }
+    }
   }
 
-  // Append relevant KB info if available
-  const kbEntry = knowledgeBase.find(k => 
-    k.category.toLowerCase().includes(product.toLowerCase()) && 
-    (k.category.toLowerCase().includes(nationality.toLowerCase()) || k.category.includes("general"))
-  );
-  if (kbEntry && typeof kbEntry.response !== "function") {
-    response += kbEntry.response + "\n\n";
+  // ========== PRIORITY 1.6: ELIGIBILITY QUESTIONS (NARROWER KEYWORDS) ==========
+  const eligibilityKeywords = /can i (get|apply)|am i eligible|do i qualify|can.*apply for|eligible for|qualify for/i;
+  const hasEligibilityIntent = eligibilityKeywords.test(lower);
+
+  if (hasEligibilityIntent) {
+    console.log("🎯 Eligibility question detected");
+
+    const age = extractAge(userText) || 0;
+    const salary = extractSalary(userText) || 0;
+    const tenureMonths = extractMonths(userText) || extractTenureYears(userText) || 0;
+    const isTrainee = /trainee/i.test(userText);
+
+    let product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product') || "personal";
+    let nationality = detectedNationality || sessionMemory.get('nationality') || "Qatari";
+
+    const eligibility = checkEligibility({
+      product,
+      nationality,
+      age,
+      salary,
+      tenureMonths,
+      isTrainee,
+      userText
+    });
+
+    let response = `**Eligibility Check for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality})**\n\n`;
+
+    if (eligibility.eligible) {
+      response += `✅ **Yes, you appear to be eligible!**\n\n${eligibility.reason}\n\n`;
+    } else {
+      response += `❌ **Unfortunately, you may not be eligible based on the details provided.**\n\n`;
+      response += eligibility.reasons.map(r => `• ${r}`).join("\n") + "\n\n";
+      response += `This is an indicative assessment only. Final approval is subject to full documentation and credit review.\nPlease visit any branch or call 4455 9999 for accurate guidance.\n\n`;
+    }
+
+    const kbEntry = knowledgeBase.find(k =>
+      k.category.toLowerCase().includes(product.toLowerCase()) &&
+      (k.category.toLowerCase().includes(nationality.toLowerCase()) || k.category.includes("general"))
+    );
+    if (kbEntry && typeof kbEntry.response !== "function") {
+      response += kbEntry.response + "\n\n";
+    }
+
+    response += `All our services are 100% Shariah-compliant.`;
+
+    sessionMemory.set('nationality', nationality);
+    sessionMemory.setLastProduct(product);
+
+    push('bot', response);
+    return;
   }
 
-  response += `All our services are 100% Shariah-compliant.`;
+  // ========== PRIORITY 1.7: COMPARISON QUESTIONS ==========
+  if (/difference between|compare|versus|vs\.|different from|same as/i.test(lower)) {
+    console.log("🔄 Comparison question detected");
+    
+    const products = [];
+    if (/vehicle|car/i.test(userText)) products.push("vehicle");
+    if (/personal/i.test(userText)) products.push("personal");
+    if (/housing|home/i.test(userText)) products.push("housing");
+    if (/service/i.test(userText)) products.push("services");
+    if (/loan/i.test(userText) && products.length === 1) {
+      // User asking if product is same as loan
+      return push('bot', `**Personal Finance vs Traditional Loans:**\n\n✅ **First Finance Personal Finance is Shariah-compliant**, meaning:\n• No interest (Riba) - instead uses profit-based structures\n• Ethical and transparent pricing\n• Approved by our Shariah Board\n\n📋 **How it works:**\n• Murabaha (cost-plus) financing\n• Clear, fixed repayment schedule\n• No hidden fees\n\n**It serves the same purpose as a personal loan** but follows Islamic principles.\n\nWould you like to know the terms and requirements?`);
+    }
 
-  sessionMemory.set('nationality', nationality);
-  sessionMemory.setLastProduct(product);
+    if (products.length >= 2) {
+      // Compare multiple products
+      const nationality = sessionMemory.get('nationality') || "Qatari";
+      let comparison = `**Comparison: ${products.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" vs ")} (${nationality})**\n\n`;
 
-  push('bot', response);
-  return; // Stop further processing
-}
+      products.forEach(prod => {
+        const category = `${prod}_finance_${nationality.toLowerCase()}`;
+        const kbEntry = knowledgeBase.find(k => k.category === category);
+        
+        if (kbEntry) {
+          comparison += `### ${prod.charAt(0).toUpperCase() + prod.slice(1)} Finance\n`;
+          const response = typeof kbEntry.response === "function" 
+            ? kbEntry.response({ nationality, salary: 0, jobDurationMonths: 0, age: 0 })
+            : kbEntry.response;
+          comparison += response + "\n\n";
+        }
+      });
 
-  // ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
+      return push('bot', comparison);
+    }
+
+    // Fallback if couldn't detect products
+    return push('bot', `**Key Differences in Financing Products:**\n\n📌 **Vehicle Finance** - For purchasing cars/motorcycles\n📌 **Personal Finance** - For general personal needs\n📌 **Housing Finance** - For buying property\n📌 **Services Finance** - For healthcare, education, travel, weddings\n\nWhich products would you like me to compare?`);
+  }
+
+// ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
   const isFollowUpMsg = isFollowUp(userText);
   const currentContext = sessionMemory.getContextSummary();
 
   console.log("🔍 Current context:", currentContext);
   console.log("❓ Is follow-up?", isFollowUpMsg);
+
+  // SPECIAL CASE: Single word nationality response
+  if (/^(qatari|expat|expatriate)$/i.test(userText.trim())) {
+    console.log("🏳️ Single-word nationality detected as follow-up");
+    
+    const nat = /expat|expatriate/i.test(userText) ? "Expat" : "Qatari";
+    sessionMemory.set('nationality', nat);
+    
+    const lastProduct = sessionMemory.getLastProduct() || sessionMemory.get('product');
+    
+    if (lastProduct) {
+      // Find KB entry for this product + nationality
+      const category = `${lastProduct}_finance_${nat.toLowerCase()}`;
+      const kbEntry = knowledgeBase.find(k => k.category === category);
+      
+      if (kbEntry) {
+        const response = typeof kbEntry.response === "function"
+          ? kbEntry.response({ nationality: nat, salary: 0, jobDurationMonths: 0, age: 0 })
+          : kbEntry.response;
+        
+        sessionMemory.setCurrentTopic(category);
+        sessionMemory.addToHistory(userText, response, category);
+        return push('bot', response);
+      }
+    }
+  }
 
   // Handle follow-up if we have product OR topic in context
   if (isFollowUpMsg && (currentContext.product || currentContext.topic)) {
@@ -710,10 +823,18 @@ async function handleGeneralInfo(userText, intent) {
 
 // ==================== HELPERS ====================
 function extractProduct(text) {
-  if (/vehicle|car/i.test(text)) return "Vehicle";
-  if (/personal/i.test(text)) return "Personal";
-  if (/service/i.test(text)) return "Services";
-  if (/housing|home|property/i.test(text)) return "Housing";
+  const lower = text.toLowerCase();
+  
+  // Don't extract product from questions ABOUT products
+  if (/is (personal|vehicle|housing|service)|same as|difference|what.*personal|tell me about/i.test(lower)) {
+    return null;
+  }
+  
+  if (/vehicle|car/i.test(lower)) return "vehicle";
+  if (/personal/i.test(lower)) return "personal";
+  if (/service/i.test(lower)) return "services";
+  if (/housing|home|property/i.test(lower)) return "housing";
+  
   return null;
 }
 
