@@ -337,60 +337,35 @@ const sendMessage = async (msgInput = input) => {
     }
   }
 
-  // ========== PRIORITY 1.6: ELIGIBILITY QUESTIONS (NARROWER KEYWORDS) ==========
-  const eligibilityKeywords = /can i (get|apply)|am i eligible|do i qualify|can.*apply for|eligible for|qualify for/i;
+// ========== PRIORITY 1.6: ELIGIBILITY QUESTIONS (GEMINI-POWERED) ==========
+  const eligibilityKeywords = /can i (get|apply)|am i eligible|do i qualify|can.*apply for|eligible for|qualify for|options for|already have/i;
   const hasEligibilityIntent = eligibilityKeywords.test(lower);
 
   if (hasEligibilityIntent) {
-    console.log("🎯 Eligibility question detected");
-
-    const age = extractAge(userText) || 0;
-    const salary = extractSalary(userText) || 0;
-    const tenureMonths = extractMonths(userText) || extractTenureYears(userText) || 0;
-    const isTrainee = /trainee/i.test(userText);
-
-    let product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product') || "personal";
-    let nationality = detectedNationality || sessionMemory.get('nationality') || "Qatari";
-
-    const eligibility = checkEligibility({
-      product,
-      nationality,
-      age,
-      salary,
-      tenureMonths,
-      isTrainee,
-      userText
-    });
-
-    let response = `**Eligibility Check for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality})**\n\n`;
-
-    if (eligibility.eligible) {
-      response += `✅ **Yes, you appear to be eligible!**\n\n${eligibility.reason}\n\n`;
-    } else {
-      response += `❌ **Unfortunately, you may not be eligible based on the details provided.**\n\n`;
-      response += eligibility.reasons.map(r => `• ${r}`).join("\n") + "\n\n";
-      response += `This is an indicative assessment only. Final approval is subject to full documentation and credit review.\nPlease visit any branch or call 4455 9999 for accurate guidance.\n\n`;
+    console.log("🎯 Complex eligibility question - routing to Gemini");
+    
+    // Let Gemini handle ALL eligibility questions
+    try {
+      const geminiResponse = await askGemini(userText);
+      if (geminiResponse && geminiResponse.length > 10) {
+        sessionMemory.addToHistory(userText, geminiResponse);
+        
+        // Update session memory with detected entities
+        if (detectedNationality) sessionMemory.set('nationality', detectedNationality);
+        if (detectedProduct) sessionMemory.setLastProduct(detectedProduct);
+        
+        return push('bot', geminiResponse);
+      }
+    } catch (err) {
+      console.error("Gemini eligibility failed:", err);
     }
 
-    const kbEntry = knowledgeBase.find(k =>
-      k.category.toLowerCase().includes(product.toLowerCase()) &&
-      (k.category.toLowerCase().includes(nationality.toLowerCase()) || k.category.includes("general"))
-    );
-    if (kbEntry && typeof kbEntry.response !== "function") {
-      response += kbEntry.response + "\n\n";
-    }
-
-    response += `All our services are 100% Shariah-compliant.`;
-
-    sessionMemory.set('nationality', nationality);
-    sessionMemory.setLastProduct(product);
-
-    push('bot', response);
-    return;
+    // Fallback only if Gemini completely fails
+    return push('bot', `I'd be happy to check your eligibility! Please call our team at **4455 9999** for a detailed assessment. They can review your complete financial profile and provide accurate guidance.\n\nAll our services are 100% Shariah-compliant.`);
   }
-
   // ========== PRIORITY 1.7: COMPARISON QUESTIONS ==========
-  if (/difference between|compare|versus|vs\.|different from|same as/i.test(lower)) {
+  if (/difference between|compare|versus|vs\.|different from|same as/i.test(lower)) 
+    {
     console.log("🔄 Comparison question detected");
     
     const products = [];
@@ -467,6 +442,17 @@ const sendMessage = async (msgInput = input) => {
     return handleFollowUpQuestion(userText, currentContext);
   }
 
+  // ========== PRIORITY 2.5: DOCUMENT REQUESTS ==========
+  if (/document|docs|required|paperwork|what.*need|what.*bring/i.test(lower)) {
+    console.log("📄 Document request detected");
+    return handleDocumentRequest(userText, {
+      type: "DOCUMENT_REQUEST",
+      entities: { 
+        product: detectedProduct, 
+        nationality: detectedNationality 
+      }
+    });
+  }
   // ========== PRIORITY 3: EXPECTING LOGIC ==========
   const expecting = sessionMemory.getExpecting();
 

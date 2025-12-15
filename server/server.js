@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 // Initialize Gemini correctly (new SDK)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "Ah7Ja_3yx0");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -114,9 +114,48 @@ Never repeat the same question (“which product?”) if the user already answer
 - If information is incomplete, uncertain, or varies by individual case:
     • Provide the best possible answer based on available knowledge.
     • Include a clear disclaimer, e.g.: "It is recommended to contact First Finance Company directly or visit a branch for more precise information."
-- Ensure the disclaimer is always professional and concise, and does not undermine the main answer.
+    - Ensure the disclaimer is always professional and concise, and does not undermine the main answer.
+
+    **IMPORTANT:** If the user asks about app login, registration, technical support, or app features, reply: "For app registration and technical support, please visit our website at https://ffcqatar.com or call 4455 9999. I can help with finance products, eligibility, and general inquiries."
+━━━━━━━━━━
+━━━━━━━━━━
+🔹 **7. CRITICAL ELIGIBILITY RULES**
+
+When users ask about eligibility ("Can I get...", "Am I eligible...", "I already have..."), you MUST:
+
+**VEHICLE FINANCE:**
+- Qatari: Age 18-65 (at end of tenure), Max 2M QAR, Up to 72 months, No min salary, Trainee needs guarantor
+- Expat: Age 18-60 (at end of tenure), Max 400K QAR, Up to 48 months, Min salary 5,000 QAR, Trainee NOT eligible
+
+**PERSONAL FINANCE:**
+- Qatari: Age 18-65, Max 2M QAR, Up to 72 months, DSR ≤75%, No guarantor
+- Expat: Age 18-60, Max 200K QAR, Up to 48 months, DSR ≤50%, Needs Qatari guarantor
+
+**HOUSING FINANCE:**
+- Qatari: Age 18-75 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤75%
+- Expat: Age 18-60 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤50%
+
+**SERVICES FINANCE:**
+- Qatari: Age 18-65, Max 2M QAR, Up to 72 months, DSR ≤75%
+- Expat: Age 18-60, 10% down payment, DSR ≤50%
+
+**CRITICAL CALCULATIONS:**
+1. **Age at end** = Current age + (Tenure in months ÷ 12). Must not exceed max age.
+2. **DSR (Debt-to-Salary Ratio)** = (All monthly debt payments + new EMI) ÷ Monthly salary. Must not exceed limit.
+3. **Multiple loans**: Existing loans count toward DSR. Flag if user mentions existing debts.
+4. **Trainee status**: Only Qatari vehicle trainees eligible (with guarantor). Expat trainees NOT eligible.
+
+**YOUR RESPONSE MUST:**
+- Calculate age at END of tenure (not just current age)
+- Mention DSR if user has existing debt
+- Be specific about WHY they're ineligible
+- Suggest alternatives (shorter tenure, lower amount, different product)
+- Format: ✅ for eligible, ❌ for ineligible, ⚠️ for concerns
+- Always end with: "This is indicative only. Visit a branch or call 4455 9999 for final approval."
+
 ━━━━━━━━━━
 User message: `;
+
 
 app.post("/api/chat", async (req, res) => {
   const { message, context } = req.body; // Accept context from frontend
@@ -168,7 +207,7 @@ User message: ${message}`;
     // 4️⃣ Ask Gemini with context
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
     });
     
     const result = await model.generateContent(contextPrompt);
@@ -188,8 +227,9 @@ User message: ${message}`;
   }
 });
 
+
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, context, threshold = 0.5) {
+function findBestMatchWithContext(userEmbedding, context, threshold = 0.6) {
   let best = null;
   let highestScore = -1;
 

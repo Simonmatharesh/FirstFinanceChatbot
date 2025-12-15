@@ -541,8 +541,9 @@ Leading finance company recognized for progressive spirit, excellent service, ou
 
   {
     category: "islamic_contracts",
-    triggers: [
-      "shariah", "islamic", "sharia", "halal finance",
+   triggers: [
+      "shariah", "islamic", "sharia", "halal finance", "shariah compliant",
+      "are you shariah", "is this shariah", "shariah approved", "halal",
       "murabaha", "ijara", "ijarah", "contract", "islamic finance",
       "عقود", "مرابحة", "إجارة", "شريعة"
     ],
