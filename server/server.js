@@ -14,14 +14,14 @@ app.use(cors());
 app.use(express.json());
 
 
-// Initialize Gemini correctly (new SDK)
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
   .join("\n\n");
 
-// This prompt makes Gemini behave exactly like you want
+
 const SYSTEM_PROMPT = `
 You are **Hadi**, the official virtual assistant for **First Finance Company (FFC) Qatar**, a Shariah-compliant financing company.
 
@@ -171,7 +171,7 @@ User message: `;
 
 
 app.post("/api/chat", async (req, res) => {
-  const { message, context } = req.body; // Accept context from frontend
+  const { message, context } = req.body; 
 
   if (!message?.trim()) {
     return res.json({ interpretation: "Please type a message." });

@@ -262,6 +262,43 @@ const sendMessage = async (msgInput = input) => {
   setInput("");
 
   const lower = userText.toLowerCase();
+    // ========== PRIORITY -1: FAQ BUTTON SHORTCUTS ==========
+  if (lower === "work hours" || lower === "working hours" || lower === "مواعيد العمل") {
+    return push('bot', `**Branch Working Hours**
+
+🏢 **Main Branch (C-Ring Road):**
+- Sunday – Wednesday: **7:30 AM – 7:00 PM**
+- Thursday: **7:30 AM – 2:30 PM**
+- Saturday: **8:00 AM – 1:00 PM**
+- Friday: **Closed**
+
+🏢 **Mawater Branch:**
+- Sunday – Thursday: **4:30 PM – 9:30 PM**
+- Saturday: **4:30 PM – 7:00 PM**
+- Friday: **Closed**
+
+📱 **Mobile App & Website:**
+Available **24/7** for your convenience!`);
+  }
+
+  //================Priority -0.5 Finance products shortcut =========
+    if (lower === "finance products" || lower === "products") {
+    return push('bot', `First Finance offers a range of Shari'a-compliant financial products for both retail and corporate customers. Here are the details:
+
+**Retail Finance Products:**
+-Personal Finance
+-Vehicle Finance (new car, used car, marine, or motorcycle)
+-Services Finance (includes healthcare services, travel and tourism, education, events, weddings, and furniture)
+-Real Estate/Housing Finance
+
+**Corporate Finance Products:**
+-Commodities Finance
+-Goods Finance
+-Vehicle and Equipment Financing or Fleet Financing (Wholesale)
+-Corporate Revolving Credit Product (Revolving Credit Limit)
+
+All services provided by First Finance Company are Shari'a-compliant financial services.`);
+  }
 
   // ========== PRIORITY 0: EMI FLOW ==========
   if (context.activeFlow === "EMI") {
