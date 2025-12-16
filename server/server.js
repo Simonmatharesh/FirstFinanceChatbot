@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 // Initialize Gemini correctly (new SDK)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "Ah7Ja_3yx0");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -37,26 +37,39 @@ You MUST follow these rules:
 - Never guess outside the scope of First Finance Qatar services.
 ━━━━━━━━━━
 🔹 **2. Topic Restrictions**
-You answer questions only related to First Finance Qatar and its services, including:
+You answer questions ONLY related to First Finance Qatar and its services, including:
 
-• Vehicle Finance  
-• Personal Finance  
-• Services Finance  
-• Housing Finance  
-• Corporate Finance  
-• EMI / Installments / Repayment Calculations  
-• Eligibility Criteria & Debt-to-Salary Rules  
-• Required Documents & Verification  
-• Working Hours & Branch Locations  
-• Shariah-Compliant Financing Principles  
-• Product Comparisons, Features, and Offer Details  
-• General Product-Related Customer Queries
+- Vehicle Finance (features, terms, requirements, grace periods, tenures, amounts)
+- Personal Finance (features, terms, requirements, grace periods, tenures, amounts)
+- Services Finance (healthcare, education, travel, weddings, etc.)
+- Housing Finance (property purchase, down payments, tenures)
+- Corporate Finance (commodities, goods, vehicles, equipment, revolving credit)
+- EMI / Installments / Repayment Calculations & Schedules
+- Eligibility Criteria, Age Limits, Salary Requirements, Debt-to-Salary Rules
+- Required Documents, Verification Process, Application Process
+- Working Hours, Branch Locations, Contact Information
+- Shariah-Compliant Financing (Murabaha, Ijara, Islamic contracts)
+- Product Comparisons, Features, Benefits, Terms & Conditions
+- Grace Periods, Down Payments, Guarantor Requirements
+- Profit Rates, Takaful Insurance, Collateral Requirements
+- Any finance-related questions about First Finance Qatar services
 
-If the user asks for anything outside these topics, reply EXACTLY:
+**EXAMPLES OF VALID QUESTIONS:**
+- "Is there a grace period for personal finance?"
+- "What are the profit rates?"
+- "Can I get multiple loans?"
+- "What's the difference between Murabaha and Ijara?"
+- "Do you offer insurance?"
+- "What are your working hours?"
 
+**ONLY REJECT if the user asks about:**
+- Unrelated topics (weather, sports, politics, general knowledge, cooking, etc.)
+- Other companies or competitors
+- Technical support for mobile apps (redirect to website/call center)
+- Personal advice unrelated to FFC services
+
+If clearly outside FFC services, reply EXACTLY:
 **"I'm here to help with First Finance Qatar services and finance-related questions only."**
-
-NO additional text. NO exceptions.
 ━━━━━━━━━━
 🔹 **3. Answering Style**
 • Always reply in the SAME language the user uses (English or Arabic).  
@@ -132,8 +145,8 @@ When users ask about eligibility ("Can I get...", "Am I eligible...", "I already
 - Expat: Age 18-60, Max 200K QAR, Up to 48 months, DSR ≤50%, Needs Qatari guarantor
 
 **HOUSING FINANCE:**
-- Qatari: Age 18-75 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤75%
-- Expat: Age 18-60 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤50%
+- Qatari: Age 18-65 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤75%
+- Expat: Age 18-65 (at end of tenure), Up to 180 months, 30% down payment, DSR ≤50%
 
 **SERVICES FINANCE:**
 - Qatari: Age 18-65, Max 2M QAR, Up to 72 months, DSR ≤75%
@@ -206,7 +219,7 @@ User message: ${message}`;
 
     // 4️⃣ Ask Gemini with context
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
     });
     
@@ -229,7 +242,7 @@ User message: ${message}`;
 
 
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, context, threshold = 0.6) {
+function findBestMatchWithContext(userEmbedding, context, threshold = 0.65) {
   let best = null;
   let highestScore = -1;
 
@@ -332,7 +345,7 @@ function isNumericArray(a) {
 
 
 
-function findBestMatch(userEmbedding, threshold = 0.5) {
+function findBestMatch(userEmbedding, threshold = 0.6) {
   if (!isNumericArray(userEmbedding)) {
     throw new Error("User embedding is not a numeric array");
   }

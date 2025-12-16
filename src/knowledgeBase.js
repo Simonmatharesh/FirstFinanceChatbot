@@ -106,6 +106,7 @@ All services are **100% Shariah-compliant**.`
 
 - Maximum financing limit: **2,000,000 QAR**
 - Repayment period: Up to **72 months** + 3 months grace
+- Grace period: Up to **3 months**
 - Debt-to-salary ratio: ≤ **75%**
 - **No guarantor required**
 
@@ -131,6 +132,7 @@ All services are **100% Shariah-compliant**.`
 
 - Maximum financing limit: **200,000 QAR**
 - Repayment period: Up to **48 months** + 3 months grace
+- Grace period: Up to **3 months**
 - Debt-to-salary ratio: ≤ **50%**
 - **Qatari guarantor required**
 
@@ -206,11 +208,12 @@ All services are **100% Shariah-compliant**.`
 
 **Main Features:**
 - Repayment period: Up to **15 years (180 months)**
+- Tenure: Up to **15 years**
 - Grace period at beginning based on credit approval
 - No administrative fees
 - Down payment: ≥ **30%**
 - Mortgage on financed property
-- Age: **18–75 years**
+- Age: **18–65 years**
 - Qatari trainee requires guarantor or min 3-month training contract
 
 **Required Documents:**

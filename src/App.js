@@ -11,7 +11,7 @@ import { embedContent,initEmbedder} from "./embeddingAPI.js";
 import { findBestMatch, isFollowUp, extractProduct, extractNationality } from "./semanticSearch.js";
 
 /* ----------  CONFIG  ---------- */
-const fuseOptions = { keys: ["triggers", "response"], threshold: 0.35, includeScore: true };
+const fuseOptions = { keys: ["triggers", "response"], threshold: 0.55, includeScore: true };
 const fuse = new Fuse(knowledgeBase, fuseOptions);
 
 /* ----------  I18N  ---------- */
@@ -236,7 +236,7 @@ const matchKnowledgeBase = (txt) => {
   const best = results[0];
   
   // Much stricter threshold
-  if (best.score > 0.4) return null;
+  if (best.score > 0.5) return null;
   
   const raw = best.item.response;
   return typeof raw === "function" ? runKbFunction(raw, txt) : raw;
@@ -297,13 +297,13 @@ const sendMessage = async (msgInput = input) => {
     // Age questions
     if (/age.*limit|maximum.*age|max.*age|what.*age|age.*requirement/i.test(lower)) {
       if (!product) {
-        return push('bot', `**Age Requirements:**\n\n**Qatari:**\n• Vehicle: 18-65 years\n• Personal: 18-65 years\n• Housing: 18-75 years\n• Services: 18-65 years\n\n**Expat:**\n• Vehicle: 18-60 years\n• Personal: 18-60 years\n• Housing: 18-60 years\n• Services: 18-60 years\n\nWhich product are you asking about?`);
+        return push('bot', `**Age Requirements:**\n\n**Qatari:**\n• Vehicle: 18-65 years\n• Personal: 18-65 years\n• Housing: 18-65 years\n• Services: 18-65 years\n\n**Expat:**\n• Vehicle: 18-60 years\n• Personal: 18-60 years\n• Housing: 18-65 years\n• Services: 18-60 years\n\nWhich product are you asking about?`);
       }
       
       const ages = {
         vehicle: { Qatari: "18-65 years", Expat: "18-60 years" },
         personal: { Qatari: "18-65 years", Expat: "18-60 years" },
-        housing: { Qatari: "18-75 years", Expat: "18-60 years" },
+        housing: { Qatari: "18-65 years", Expat: "18-65 years" },
         services: { Qatari: "18-65 years", Expat: "18-60 years" }
       };
       
@@ -324,7 +324,7 @@ const sendMessage = async (msgInput = input) => {
       const amounts = {
         vehicle: { Qatari: "2,000,000 QAR", Expat: "400,000 QAR" },
         personal: { Qatari: "2,000,000 QAR", Expat: "200,000 QAR" },
-        housing: { Qatari: "Based on property value (30% down)", Expat: "Based on property value (30% down)" },
+        
         services: { Qatari: "2,000,000 QAR", Expat: "Varies by service" }
       };
       
@@ -443,41 +443,9 @@ const sendMessage = async (msgInput = input) => {
   }
 
   // ========== PRIORITY 2.5: DOCUMENT REQUESTS ==========
-  if (/document|docs|required|paperwork|what.*need|what.*bring/i.test(lower)) {
-    console.log("📄 Document request detected");
-    return handleDocumentRequest(userText, {
-      type: "DOCUMENT_REQUEST",
-      entities: { 
-        product: detectedProduct, 
-        nationality: detectedNationality 
-      }
-    });
-  }
-  // ========== PRIORITY 3: EXPECTING LOGIC ==========
-  const expecting = sessionMemory.getExpecting();
 
-  if (expecting === 'product') {
-    const prod = extractProduct(userText);
-    if (prod) {
-      sessionMemory.set('product', prod);
-      sessionMemory.setLastProduct(prod);
-      sessionMemory.clearExpecting();
-      return handleDocumentRequest(userText, {
-        type: "DOCUMENT_REQUEST",
-        entities: { product: prod, nationality: sessionMemory.get('nationality') }
-      });
-    }
-  } 
-  else if (expecting === 'nationality') {
-    if (detectedNationality) {
-      sessionMemory.set('nationality', detectedNationality);
-      sessionMemory.clearExpecting();
-      return handleDocumentRequest(userText, {
-        type: "DOCUMENT_REQUEST",
-        entities: { product: sessionMemory.get('product'), nationality: detectedNationality }
-      });
-    }
-  }
+  // ========== PRIORITY 3: EXPECTING LOGIC ==========
+
 
   // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
   try {
@@ -729,37 +697,7 @@ async function askGemini(userText) {
 }
 
 // ==================== INTENT HANDLERS ====================
-function handleDocumentRequest(userText, intent) {
-  let nat = intent.entities?.nationality || sessionMemory.get('nationality');
-  let prod = intent.entities?.product || sessionMemory.get('product');
 
-  const lastEMI = sessionMemory.get('lastEMI');
-  if ((!nat || !prod) && lastEMI) {
-    if (!nat) nat = lastEMI.nationality;
-    if (!prod) prod = lastEMI.product;
-  }
-
-  if (nat && prod) {
-    const docs = getDocumentList(nat, prod);
-    sessionMemory.clearExpecting(); // Clear expectation
-    return push('bot', docs);
-  }
-
-  const missing = [];
-  if (!nat) missing.push("nationality (Qatari or Expat)");
-  if (!prod) missing.push("finance product (Vehicle, Personal, Services, or Housing)");
-
-  // Set what we're expecting next
-  if (!prod) {
-    sessionMemory.setExpecting('product');
-  } else if (!nat) {
-    sessionMemory.setExpecting('nationality');
-  }
-
-  return push('bot', 
-    `To provide the exact document list, please tell me:\n${missing.map(m => `• Your ${m}`).join('\n')}`
-  );
-}
 
 function handleClarification(userText, intent) {
   const lastEMI = sessionMemory.get('lastEMI');
@@ -781,8 +719,8 @@ function handleProductSwitch(userText, intent) {
   if (newProd && sessionMemory.has('nationality')) {
     sessionMemory.set('product', newProd);
     const nat = sessionMemory.get('nationality');
-    const docs = getDocumentList(nat, newProd);
-    return push('bot', docs);
+    
+    return push('bot');
   }
   
   return push('bot', "Which product would you like to know about? (Vehicle, Personal, Services, or Housing)");
@@ -824,33 +762,7 @@ function extractProduct(text) {
   return null;
 }
 
-function getDocumentList(nationality, product) {
-  const baseList = nationality === 'Qatari'
-    ? `**Required Documents for ${product} Finance (Qatari):**
 
-1. Recent salary certificate
-2. Original Qatar ID
-3. Bank statement (last 3 months)
-4. Alternative payment cheques
-5. National address certificate
-6. Price offer directed to First Finance Company${product === 'Vehicle' ? '\n7. Vehicle inspection report (for used vehicles)' : ''}
-
-All services are **Shariah-compliant**.`
-    : `**Required Documents for ${product} Finance (Expat):**
-
-1. Recent salary certificate
-2. Original Qatar ID + Passport
-3. Bank statement (last 3 months, bank stamped)
-4. Alternative payment cheques
-5. National address certificate
-6. Price offer directed to First Finance Company${product === 'Vehicle' ? '\n7. Vehicle inspection report (for used vehicles)' : ''}
-
-**Note:** Your sponsorship/residence must typically be with the same employer issuing the salary certificate.
-
-All services are **Shariah-compliant**.`;
-
-  return baseList;
-}
 function handleEMIFlow(userText, time) {
   // Check for cancel/stop commands
   if (/cancel|stop|no|never ?mind|no need|forget it|don'?t want|exit|quit/i.test(userText)) {
