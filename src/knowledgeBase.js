@@ -321,6 +321,304 @@ All services are **100% Shariah-compliant**.`
    * ═══════════════════════════════════════════════════════════════ */
 
   {
+  category: "corporate_finance_commodities_qatari",
+  triggers: [
+    "qatari commodities finance",
+    "qatari corporate commodities finance",
+    "commodities finance for qatari companies",
+    "qatari company working capital",
+    "تمويل السلع للشركات القطرية"
+  ],
+  response: `
+**Qatari Corporate Finance – Commodities Finance**
+
+A **Shariah-compliant** financing solution based on commodity and metal transactions, designed to provide liquidity for **rent, salaries, and supplier payments**.
+
+**Eligibility:**
+• Company owned **more than 50% by Qatari nationals**
+
+**Main Features:**
+• Long repayment period suitable to business activity  
+• Grace period at the beginning (subject to approval)  
+• No administrative fees  
+• Financing based on company size and needs  
+• Takaful Insurance  
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, trade license, and establishment registration  
+3. Bank statement for last 6 months (stamped)  
+4. Original ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Any additional documents required by FFC
+`
+},
+{
+  category: "corporate_finance_commodities_non_qatari",
+  triggers: [
+    "expat commodities finance",
+    "non qatari commodities finance",
+    "foreign company commodities finance",
+    "commodities finance for expat companies",
+    "تمويل السلع للشركات غير القطرية"
+  ],
+  response: `
+**Non-Qatari Corporate Finance – Commodities Finance**
+
+A **Shariah-compliant** financing solution based on commodity and metal transactions to generate liquidity for operational expenses.
+
+**Eligibility:**
+• 100% foreign-owned or majority non-Qatari ownership
+
+**Main Features:**
+• Same features and repayment terms as Qatari companies  
+• Grace period subject to approval  
+• No administrative fees  
+• Takaful Insurance  
+
+**Mandatory Requirement:**
+• **Collateral (cash or real estate ≥ 80%)**  
+  **OR**  
+• **Qatari guarantor**
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, trade license, and establishment registration  
+3. Bank statement for last 6 months (stamped)  
+4. Original ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Any additional documents required by FFC
+`
+}
+,
+{
+  category: "corporate_finance_goods_qatari",
+  triggers: [
+    "qatari goods finance",
+    "qatari corporate goods finance",
+    "goods finance for qatari companies",
+    "trade finance qatari company",
+    "inventory finance qatari",
+    "تمويل البضائع للشركات القطرية"
+  ],
+  response: `
+**Qatari Corporate Finance – Goods Finance**
+
+A financing solution that enables Qatari companies to purchase goods **locally and internationally**, supporting trade and inventory requirements.
+
+**Eligibility:**
+• Company owned **more than 50% by Qatari nationals**
+
+**Main Features:**
+• Repayment period up to 36 months (including grace period)  
+• Local and international goods purchase  
+• Grace period at the beginning (subject to credit approval)  
+• No administrative fees  
+• Financing tailored to the scale of the business  
+• Takaful Insurance  
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, commercial license, and establishment registration  
+3. Bank statement for the last 6 months (stamped and signed)  
+4. Original personal ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Quotation addressed to First Finance Company  
+8. Any other documents required by FFC
+`
+}
+,
+{
+  category: "corporate_finance_goods_non_qatari",
+  triggers: [
+    "expat goods finance",
+    "non qatari goods finance",
+    "foreign company goods finance",
+    "goods finance for expat companies",
+    "trade finance foreign company",
+    "تمويل البضائع للشركات غير القطرية"
+  ],
+  response: `
+**Non-Qatari Corporate Finance – Goods Finance**
+
+A financing solution for foreign-owned or expat companies to purchase goods **locally or internationally**, supporting trade operations and inventory needs.
+
+**Eligibility:**
+• 100% foreign-owned or majority non-Qatari ownership
+
+**Main Features:**
+• Same repayment period and benefits as Qatari companies  
+• Repayment up to 36 months (including grace period)  
+• Grace period subject to credit approval  
+• No administrative fees  
+• Financing based on business activity and request  
+• Takaful Insurance  
+
+**Mandatory Requirement:**
+• **Collateral (cash or real estate ≥ 80% of finance amount)**  
+  **OR**  
+• **Qatari guarantor**
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, commercial license, and establishment registration  
+3. Bank statement for the last 6 months (stamped and signed)  
+4. Original personal ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Quotation addressed to First Finance Company  
+8. Any other documents required by FFC
+`
+}
+,
+{
+  category: "corporate_finance_vehicle_fleet_qatari",
+  triggers: [
+    "qatari vehicle finance",
+    "qatari fleet finance",
+    "qatari equipment finance",
+    "fleet financing qatari company",
+    "vehicle loan for qatari companies",
+    "تمويل المركبات للشركات القطرية",
+    "تمويل الأساطيل للشركات القطرية"
+  ],
+  response: `
+**Qatari Corporate Financing – Vehicle & Equipment / Fleet Financing (Wholesale)**
+
+Financing solution for Qatari companies to purchase **vehicles, equipment, or fleets** for operational or expansion needs.
+
+**Eligibility:**
+• Company owned **more than 50% by Qatari nationals**
+
+**Main Features:**
+• Repayment period up to 60 months (including grace period)  
+• Grace period at the beginning (subject to credit approval)  
+• Financing tailored to the business activity and request  
+• No administrative fees  
+• Lien on the financed vehicles and equipment  
+• Takaful Insurance  
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, commercial license, and establishment registration  
+3. Bank statement for the last 6 months (stamped and signed)  
+4. Original personal ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Quotation addressed to First Finance Company
+`
+}
+,
+{
+  category: "corporate_finance_vehicle_fleet_non_qatari",
+  triggers: [
+    "expat vehicle finance",
+    "non qatari fleet finance",
+    "foreign company vehicle finance",
+    "fleet financing for expat companies",
+    "equipment finance foreign company",
+    "تمويل المركبات للشركات غير القطرية",
+    "تمويل الأساطيل للشركات غير القطرية"
+  ],
+  response: `
+**Non-Qatari Corporate Financing – Vehicle & Equipment / Fleet Financing (Wholesale)**
+
+Financing solution for foreign-owned or expat companies to purchase **vehicles, equipment, or fleets**.
+
+**Eligibility:**
+• 100% foreign-owned or majority non-Qatari ownership
+
+**Main Features:**
+• Same repayment terms and features as Qatari companies  
+• Repayment period up to 60 months (including grace period)  
+• Grace period subject to credit approval  
+• No administrative fees  
+• Lien on financed vehicles and equipment  
+• Takaful Insurance  
+
+**Mandatory Requirement:**
+• **Collateral (cash or real estate ≥ 80% of finance amount)**  
+  **OR**  
+• **Qatari guarantor**
+
+**Required Documents:**
+1. Last 3 audited financial statements or internal financial statement  
+2. Valid commercial registration, commercial license, and establishment registration  
+3. Bank statement for the last 6 months (stamped and signed)  
+4. Original personal ID cards of partners  
+5. Original passports of resident partners  
+6. Operating contracts, invoices, and supply orders  
+7. Quotation addressed to First Finance Company
+`
+}
+,
+{
+  category: "corporate_finance_revolving_credit_qatari",
+  triggers: [
+    "qatari revolving credit",
+    "qatari corporate credit line",
+    "revolving facility qatari company",
+    "working capital limit qatari",
+    "تمويل ائتماني متجدد للشركات القطرية"
+  ],
+  response: `
+**Qatari Corporate Financing – Revolving Credit**
+
+Flexible revolving credit limit for Qatari companies to manage **working capital and operational needs**.
+
+**Eligibility:**
+• Company owned **more than 50% by Qatari nationals**
+
+**Main Features:**
+• Revolving credit limit valid for a specified period (e.g., 1 year)  
+• Multiple withdrawals during the validity period as per business needs  
+• Profit calculated only on the utilized (withdrawn) amount  
+• Reusable credit limit within the period
+
+**Required Documents:**
+Documents depend on the type of credit limit and financing needs.  
+Please contact your **Relationship Manager at First Finance Company**.
+`
+}
+,
+{
+  category: "corporate_finance_revolving_credit_non_qatari",
+  triggers: [
+    "expat revolving credit",
+    "non qatari corporate credit line",
+    "revolving facility for foreign company",
+    "working capital limit expat",
+    "تمويل ائتماني متجدد للشركات غير القطرية"
+  ],
+  response: `
+**Non-Qatari Corporate Financing – Revolving Credit**
+
+Flexible revolving credit limit for **foreign-owned or expat companies** to manage operational and working capital requirements.
+
+**Eligibility:**
+• 100% foreign-owned or majority non-Qatari ownership
+
+**Main Features:**
+• Same credit limit and repayment features as Qatari companies  
+• Multiple withdrawals allowed within the validity period  
+• Profit charged only on utilized amount  
+
+**Mandatory Requirement:**
+• **Collateral (cash or real estate ≥ 80% of credit amount)**  
+  **OR**  
+• **Qatari guarantor**
+
+**Required Documents:**
+Documents depend on the type of credit limit and financing requirements.  
+Contact your **Relationship Manager at First Finance Company** for details.
+`
+}
+,
+
+  {
     category: "corporate_finance_general",
     triggers: [
       "corporate finance", "company finance", "business finance",

@@ -299,6 +299,10 @@ Available **24/7** for your convenience!`);
 
 All services provided by First Finance Company are Shari'a-compliant financial services.`);
   }
+  //priority
+  if (lower =="10122003"){
+    return push('bot','23062004')
+  }
 
   // ========== PRIORITY 0: EMI FLOW ==========
   if (context.activeFlow === "EMI") {

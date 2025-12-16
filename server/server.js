@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "yx0");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
