@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { knowledgeBase } from "./knowledgeBase";
 import Fuse from "fuse.js";
-import { interpretUserMessage } from "./gemini";
+
 import { sessionMemory } from './sessionMemory';
 import { emiRates, eligibilityRules, requiredDocs } from './config';
 import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";

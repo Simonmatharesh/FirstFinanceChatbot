@@ -1122,5 +1122,22 @@ Would you like to start an EMI calculation?`;
 
 📞 For exact profit rates, contact us at **+974 4455 9999**`;
     }
+  },
+  {
+    category : "App",
+    triggers : ["app","download","mobile"],
+    response :`
+**First Finance Company Mobile App - Features & Digital Services**:
+Our mobile app is designed to meet all your day-to-day financing needs quickly and efficiently. With this versatile app, you can:
+•	Apply for financing, review details, and track updates.
+•	Receive notifications via email and SMS.
+•	Discover offers and promotional campaigns.
+•	Browse our financing products.
+•	Locate branches, with contact details and operating hours.
+•	View foreign exchange rates.
+
+Download the First Finance Company mobile app today and enjoy an enhanced financing experience on the Apple and Google stores at the following links:
+1.	[Apple App Store](https://apps.apple.com/us/app/ffc-online/id1581399823)
+2.	[Google Play Store](https://play.google.com/store/apps/details?id=com.its.mobilebanking.ffc&pli=1)`
   }
 ];

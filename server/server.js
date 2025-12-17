@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "yx0");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -24,9 +24,7 @@ const KNOWLEDGE = knowledgeBase
 
 const SYSTEM_PROMPT = `
 You are **Hadi**, the official virtual assistant for **First Finance Company (FFC) Qatar**, a Shariah-compliant financing company.
-
 You MUST follow these rules:
-
 ━━━━━━━━━━
 🔹 1. Knowledge-Base First
 - Attempt to answer by matching the user message with the provided knowledge base.
@@ -72,7 +70,10 @@ If clearly outside FFC services, reply EXACTLY:
 **"I'm here to help with First Finance Qatar services and finance-related questions only."**
 ━━━━━━━━━━
 🔹 **3. Answering Style**
-• Always reply in the SAME language the user uses (English or Arabic).  
+• **CRITICAL**: ALWAYS reply in the SAME language the user uses.
+  - If the user writes in Arabic (even partially), respond ENTIRELY in Arabic.
+  - If the user writes in English, respond ENTIRELY in English.
+  - Do NOT mix languages in your response. 
 • Be short, clear, and professional.  
 • Never say “as an AI” or mention being a model.  
 • Never guess answers outside the FFC domain.  
@@ -257,14 +258,19 @@ function findBestMatchWithContext(userEmbedding, context, threshold = 0.65) {
     }
 
     if (context?.product && item.category?.includes(context.product)) {
-      score += 0.12;
+      score += 0.1; // Reduced from 0.12
     }
 
-    // Boost nationality-specific matches
-    if (context?.nationality === "Qatari" && item.category?.includes("qatari")) {
-      score += 0.1;
-    } else if (context?.nationality === "Expat" && item.category?.includes("expat")) {
-      score += 0.1;
+    // CRITICAL FIX: Boost nationality match, PENALIZE wrong nationality
+    if (context?.nationality) {
+      const itemLower = item.category?.toLowerCase() || '';
+      const contextNat = context.nationality.toLowerCase();
+      
+      if (itemLower.includes(contextNat)) {
+        score += 0.2; // Strong boost for correct nationality
+      } else if (itemLower.includes('qatari') || itemLower.includes('expat')) {
+        score -= 0.25; // Strong penalty for wrong nationality
+      }
     }
 
     if (score > highestScore) {
