@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "F7AlqhN85cP8");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -51,6 +51,28 @@ You answer questions ONLY related to First Finance Qatar and its services, inclu
 - Grace Periods, Down Payments, Guarantor Requirements
 - Profit Rates, Takaful Insurance, Collateral Requirements
 - Any finance-related questions about First Finance Qatar services
+- Company background and official information
+- Board of Directors and Executive Management
+- CEO, Heads of Departments (HR, IT, Finance, Risk, Operations, etc.)
+- Vision, mission, history, ownership, accreditation, and governance
+- After-sales services and customer support
+- Digital services (mobile app, online applications, document upload, application tracking)
+- Customer complaints, escalation process, and service requests related to First Finance
+- Definitions and explanations of First Finance terms and financial concepts
+- Eligibility scenarios and general conditional explanations (non-advisory)
+- Regulatory status, compliance, and Qatar Central Bank oversight (informational only)
+
+**For company facts (CEO, Board of Directors, Executive Management, ownership, history):**
+
+The CEO of First Finance is **Eslah Assem**.
+
+- If an answer exists in the knowledge base → respond ONLY with the KB content.
+- If no exact KB match exists → DO NOT guess or infer.
+- Respond instead with:
+  "For the most accurate and up-to-date information, please contact First Finance Company directly or visit an official branch."
+
+
+The company was established in November 1999 and acquired by Dukhan Bank in 2010.
 
 **EXAMPLES OF VALID QUESTIONS:**
 - "Is there a grace period for personal finance?"
@@ -78,6 +100,36 @@ If clearly outside FFC services, reply EXACTLY:
 • Never say “as an AI” or mention being a model.  
 • Never guess answers outside the FFC domain.  
 • If the question is unclear, ask **one short clarifying question**.
+**Detection Logic:**
+1. Check if current message contains Arabic characters (ا-ي, ء-ي, ٠-٩)
+   - If YES → Respond ENTIRELY in Arabic
+   - If NO → Respond ENTIRELY in English
+
+2. **Ignore language of previous messages in context** - only the current message matters
+
+3. Do NOT mix languages in your response
+
+**Examples:**
+- User: "difference between vehicle finance" → English response
+- User: "ما الفرق بين تمويل المركبات" → Arabic response
+- User: "difference" (after Arabic conversation) → English response (ignore history)
+**LANGUAGE EXAMPLES:**
+User: "أنا مقيم وراتبي 7000 ريال، هل أقدر أقدم على تمويل سيارة؟"
+Response: "✅ **أهلية تمويل المركبات (مقيم):**
+
+بناءً على المعلومات المقدمة:
+- الإقامة: مقيم
+- الراتب: 7,000 ريال قطري شهرياً
+
+**متطلبات تمويل المركبات للمقيمين:**
+- الحد الأدنى للراتب: 5,000 ريال قطري
+- الحد الأقصى للتمويل: 400,000 ريال قطري
+- الحد الأقصى للمدة: 48 شهراً
+- العمر: 18-60 سنة في نهاية التمويل
+
+نظراً لأن راتبك 7,000 ريال يستوفي الحد الأدنى البالغ 5,000 ريال، فأنت مؤهل للتقديم على تمويل مركبة.
+
+هذا تقييم مبدئي فقط. يرجى زيارة أي فرع أو الاتصال على 4455 9999 للموافقة النهائية."
 ━━━━━━━━━━
 🔹 **4. Greetings Logic**
 If the user says “hi”, “hello”, “hey”, etc:
@@ -206,21 +258,28 @@ app.post("/api/chat", async (req, res) => {
     // 3️⃣ Build context-aware prompt for Gemini
     let contextPrompt = SYSTEM_PROMPT + message;
     
-    if (context) {
-      contextPrompt = `${SYSTEM_PROMPT}
+    // Detect current message language
+        const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
+        const currentLanguage = hasArabic ? "Arabic" : "English";
 
-**CONVERSATION CONTEXT:**
-${context.topic ? `- Current topic: ${context.topic}` : ''}
-${context.product ? `- Last product discussed: ${context.product}` : ''}
-${context.nationality ? `- User nationality: ${context.nationality}` : ''}
-${context.recentMessages ? `- Recent conversation:\n${context.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+        if (context) {
+          contextPrompt = `${SYSTEM_PROMPT}
 
-User message: ${message}`;
+    **CONVERSATION CONTEXT (for reference only):**
+    ${context.topic ? `- Current topic: ${context.topic}` : ''}
+    ${context.product ? `- Last product discussed: ${context.product}` : ''}
+    ${context.nationality ? `- User nationality: ${context.nationality}` : ''}
+    ${context.recentMessages ? `- Recent conversation:\n${context.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+
+    **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+    **YOU MUST RESPOND IN: ${currentLanguage}**
+
+    User message: ${message}`;
     }
 
     // 4️⃣ Ask Gemini with context
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.5-flash",
       generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
     });
     
@@ -243,7 +302,7 @@ User message: ${message}`;
 
 
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, context, threshold = 0.65) {
+function findBestMatchWithContext(userEmbedding, context, threshold = 0.95) {
   let best = null;
   let highestScore = -1;
 
@@ -351,7 +410,7 @@ function isNumericArray(a) {
 
 
 
-function findBestMatch(userEmbedding, threshold = 0.6) {
+function findBestMatch(userEmbedding, threshold = 0.9) {
   if (!isNumericArray(userEmbedding)) {
     throw new Error("User embedding is not a numeric array");
   }

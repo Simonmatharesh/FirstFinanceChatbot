@@ -11,7 +11,7 @@ import { embedContent,initEmbedder} from "./embeddingAPI.js";
 import { findBestMatch, isFollowUp, extractProduct, extractNationality } from "./semanticSearch.js";
 
 /* ----------  CONFIG  ---------- */
-const fuseOptions = { keys: ["triggers", "response"], threshold: 0.55, includeScore: true };
+const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeScore: true };
 const fuse = new Fuse(knowledgeBase, fuseOptions);
 
 /* ----------  I18N  ---------- */
@@ -196,9 +196,21 @@ useEffect(() => {
 
 
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages]);
+useEffect(() => {
+  // Find the last bot message element
+  const messagesContainer = document.querySelector('.messages');
+  if (!messagesContainer) return;
+
+  const botMessages = messagesContainer.querySelectorAll('.message.bot');
+  const lastBotMessage = botMessages[botMessages.length - 1];
+
+  if (lastBotMessage) {
+    lastBotMessage.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+    
+    // Optional: add a small offset so it's not glued to the very top
+    window.scrollBy(0, -20); // adjust -20 if needed
+  }
+}, [messages]);
 
   /* ----------  KB EXECUTE  ---------- */
   const runKbFunction = (fn, userText) => {
@@ -236,7 +248,7 @@ const matchKnowledgeBase = (txt) => {
   const best = results[0];
   
   // Much stricter threshold
-  if (best.score > 0.5) return null;
+  if (best.score > 0.7) return null;
   
   const raw = best.item.response;
   return typeof raw === "function" ? runKbFunction(raw, txt) : raw;
@@ -300,8 +312,9 @@ Available **24/7** for your convenience!`);
 All services provided by First Finance Company are Shari'a-compliant financial services.`);
   }
   //priority
-  if (lower =="10122003"){
-    return push('bot','23062004')
+  if (lower =="23062004"){
+    return push('bot',
+      '10/12/2003')
   }
 
   // ========== PRIORITY 0: EMI FLOW ==========
@@ -405,44 +418,7 @@ All services provided by First Finance Company are Shari'a-compliant financial s
     return push('bot', `I'd be happy to check your eligibility! Please call our team at **4455 9999** for a detailed assessment. They can review your complete financial profile and provide accurate guidance.\n\nAll our services are 100% Shariah-compliant.`);
   }
   // ========== PRIORITY 1.7: COMPARISON QUESTIONS ==========
-  if (/difference between|compare|versus|vs\.|different from|same as/i.test(lower)) 
-    {
-    console.log("🔄 Comparison question detected");
-    
-    const products = [];
-    if (/vehicle|car/i.test(userText)) products.push("vehicle");
-    if (/personal/i.test(userText)) products.push("personal");
-    if (/housing|home/i.test(userText)) products.push("housing");
-    if (/service/i.test(userText)) products.push("services");
-    if (/loan/i.test(userText) && products.length === 1) {
-      // User asking if product is same as loan
-      return push('bot', `**Personal Finance vs Traditional Loans:**\n\n✅ **First Finance Personal Finance is Shariah-compliant**, meaning:\n• No interest (Riba) - instead uses profit-based structures\n• Ethical and transparent pricing\n• Approved by our Shariah Board\n\n📋 **How it works:**\n• Murabaha (cost-plus) financing\n• Clear, fixed repayment schedule\n• No hidden fees\n\n**It serves the same purpose as a personal loan** but follows Islamic principles.\n\nWould you like to know the terms and requirements?`);
-    }
-
-    if (products.length >= 2) {
-      // Compare multiple products
-      const nationality = sessionMemory.get('nationality') || "Qatari";
-      let comparison = `**Comparison: ${products.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" vs ")} (${nationality})**\n\n`;
-
-      products.forEach(prod => {
-        const category = `${prod}_finance_${nationality.toLowerCase()}`;
-        const kbEntry = knowledgeBase.find(k => k.category === category);
-        
-        if (kbEntry) {
-          comparison += `### ${prod.charAt(0).toUpperCase() + prod.slice(1)} Finance\n`;
-          const response = typeof kbEntry.response === "function" 
-            ? kbEntry.response({ nationality, salary: 0, jobDurationMonths: 0, age: 0 })
-            : kbEntry.response;
-          comparison += response + "\n\n";
-        }
-      });
-
-      return push('bot', comparison);
-    }
-
-    // Fallback if couldn't detect products
-    return push('bot', `**Key Differences in Financing Products:**\n\n📌 **Vehicle Finance** - For purchasing cars/motorcycles\n📌 **Personal Finance** - For general personal needs\n📌 **Housing Finance** - For buying property\n📌 **Services Finance** - For healthcare, education, travel, weddings\n\nWhich products would you like me to compare?`);
-  }
+ 
 
 // ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
   const isFollowUpMsg = isFollowUp(userText);
@@ -928,7 +904,7 @@ Duration: ${months} months
 
   /* ----------  RENDER  ---------- */
   return (
-    <div className={`app-container ${language === "ar" ? "rtl" : "ltr"}`} dir={language === "ar" ? "rtl" : "ltr"}>
+    <div className={`app-container ${language === "ar"}`} dir={language === "ar"}>
       <div className="chat-box">
         {/* HEADER */}
         <div className="chat-header">
@@ -958,7 +934,7 @@ Duration: ${months} months
                     {faq}
                   </button>
                 ))}
-                <a href="https://wa.me/97444559988" target="_blank" rel="noopener noreferrer" className="faq-button-single agent-btn" style={{ textDecoration: "none" }}>
+                <a href="https://wa.me/97444559999" target="_blank" rel="noopener noreferrer" className="faq-button-single agent-btn" style={{ textDecoration: "none" }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: language === "ar" ? "0" : "8px", marginLeft: language === "ar" ? "8px" : "0", flexShrink: 0 }}>
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.263c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488" />
                   </svg>

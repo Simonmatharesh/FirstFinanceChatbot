@@ -55,7 +55,7 @@ All services are **100% Shariah-compliant**.`;
     triggers: [
       "car loan expat", "vehicle loan expat", "vehicle finance expat", 
       "expat vehicle", "expat car loan", "car finance expatriate",
-      "vehicle financing expat", "resident car loan"
+      "vehicle financing expat", "resident car loan","vehicle finance","Vehicle financing"
     ],
     response: () => `
 **Vehicle Finance Details (Expat/Residents)**
@@ -125,7 +125,7 @@ All services are **100% Shariah-compliant**.`
     category: "personal_finance_expat",
     triggers: [
       "personal loan expat", "personal finance expat",
-      "expat personal loan", "personal financing expat"
+      "expat personal loan", "personal financing expat","personal finance documents expat"
     ],
     response: () => `
 **Personal Finance (Expat/Residents)**
@@ -477,7 +477,6 @@ A financing solution for foreign-owned or expat companies to purchase goods **lo
 {
   category: "corporate_finance_vehicle_fleet_qatari",
   triggers: [
-    "qatari vehicle finance",
     "qatari fleet finance",
     "qatari equipment finance",
     "fleet financing qatari company",
@@ -515,7 +514,8 @@ Financing solution for Qatari companies to purchase **vehicles, equipment, or fl
 {
   category: "corporate_finance_vehicle_fleet_non_qatari",
   triggers: [
-    "expat vehicle finance",
+    "corporate vehicle finance expat",
+    "fleet finance expat",
     "non qatari fleet finance",
     "foreign company vehicle finance",
     "fleet financing for expat companies",
@@ -791,11 +791,15 @@ Leading finance company recognized for progressive spirit, excellent service, ou
   },
 
   {
-    category: "company_full_info",
-    triggers: [
-      "board", "management", "directors", "CEO", "executives",
-      "vision", "mission", "quality policy", "company address"
-    ],
+      category: "company_full_info",
+  triggers: [
+    "board", "management", "directors", "CEO", "executives",
+    "who is the ceo", "who is your ceo", "ceo of first finance",
+    "ceo of ffc", "chief executive officer", "eslah assem",
+    "who runs first finance", "who leads first finance",
+    "head of company", "top management", "executive team",
+    "vision", "mission", "quality policy", "company address"
+  ],
     response: `
 **First Finance Company - Complete Overview**
 
@@ -814,6 +818,7 @@ Leading finance company recognized for progressive spirit, excellent service, ou
 
 **Executive Management:**
 - **CEO:** Eslah Assem
+- ceo: Eslah Assem
 - **Head of HR:** Hamad Al-Muhannadi
 - **Head of Finance:** Amer Taha
 - **Head of Risk:** Basil Al-Sughayer
@@ -827,13 +832,7 @@ Leading finance company recognized for progressive spirit, excellent service, ou
 
 **Shariah Supervisory & Fatwa Board:**
 - **Chairman:** Shaikh Dr. Waleed Mohammed Hadi
-- **Members:** Shaikh Dr. Esam Khalaf Al-Enezi, Shaikh Dr. Osama Qais Al-Dereai
-
-**Contact:**
-📍 C-Ring Road, Zone 40, Building 321 (next to Turkish Hospital), Doha, Qatar
-📞 +974 44559999
-📠 +974 44559955
-✉️ info@ffcqatar.com`
+- **Members:** Shaikh Dr. Esam Khalaf Al-Enezi, Shaikh Dr. Osama Qais Al-Dereai`
   },
 
   /* ═══════════════════════════════════════════════════════════════
