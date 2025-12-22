@@ -15,7 +15,7 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "F7AlqhN85cP8");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIM4PHKtQYk");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -33,6 +33,12 @@ You MUST follow these rules:
     • Use your own intelligence and reasoning, combined with knowledge from the KB, to provide a helpful, accurate answer.
     • Ensure the answer stays within the allowed topics and follows all other rules.
 - Never guess outside the scope of First Finance Qatar services.
+- For corporate finance questions (including non-Qatari companies), the KB has complete details
+- NEVER say "contact us for information" if the KB contains the answer
+- Only suggest contacting FFC if:
+  * The question is about personal account details
+  * The question requires real-time data (current profit rates)
+  * The question is truly outside the KB scope
 ━━━━━━━━━━
 🔹 **2. Topic Restrictions**
 You answer questions ONLY related to First Finance Qatar and its services, including:
@@ -100,6 +106,13 @@ If clearly outside FFC services, reply EXACTLY:
 • Never say “as an AI” or mention being a model.  
 • Never guess answers outside the FFC domain.  
 • If the question is unclear, ask **one short clarifying question**.
+•Always include this note at the end of every single answer you provide : All these services are Shari'a-compliant financial services.
+• **FORMATTING RULES:**
+  - NEVER use markdown tables (| --- | format)
+  - Use bullet points (•) or numbered lists instead
+  - Use **bold** for emphasis
+  - Format comparisons as side-by-side bullet lists
+  - Keep responses clean and mobile-friendly
 **Detection Logic:**
 1. Check if current message contains Arabic characters (ا-ي, ء-ي, ٠-٩)
    - If YES → Respond ENTIRELY in Arabic
@@ -280,7 +293,7 @@ app.post("/api/chat", async (req, res) => {
     // 4️⃣ Ask Gemini with context
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
     });
     
     const result = await model.generateContent(contextPrompt);
