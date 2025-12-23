@@ -754,6 +754,48 @@ Varies based on credit limit type and financing requirements. Please contact you
 
 All services are **100% Shariah-compliant**.`
   },
+  /* ═══════════════════════════════════════════════════════════════
+ * QUALITY POLICY
+ * ═══════════════════════════════════════════════════════════════ */
+
+{
+  category: "quality_policy",
+  triggers: [
+    "quality policy",
+    "ffc quality policy",
+    "iso policy",
+    "quality management",
+    "qms",
+    "iso 9001",
+    "quality standards",
+    "سياسة الجودة",
+    "نظام إدارة الجودة"
+  ],
+  response: `
+**Quality Policy – First Finance Company**
+
+At **First Finance Company (FFC)**, we are committed to *meeting the financial needs of our individual and corporate customers through an integrated suite of Shari’ah-compliant financial services*.
+
+To achieve this, FFC has implemented a **comprehensive Quality Management System (QMS)** that:
+✅ Complies with **ISO 9001:2015**
+✅ Meets applicable **legal, regulatory, and quality requirements**
+
+**Our Quality Commitments:**
+✓ Deliver efficient and effective services that meet and exceed customer expectations  
+✓ Enhance customer satisfaction through timely, accurate, and reliable services  
+✓ Set **SMART objectives** (Specific, Measurable, Achievable, Realistic, Time-bound)  
+✓ Allocate adequate resources to ensure service excellence  
+✓ Train and develop competent employees aligned with the Company’s mission  
+✓ Ensure awareness and understanding of the Quality Policy across the organization  
+✓ Commit to **continual improvement** of the QMS with engagement from employees, customers, suppliers, and stakeholders  
+
+**Governance & Review:**
+Senior Management, in cooperation with all FFC employees, conducts periodic reviews of policies, procedures, and systems to ensure ongoing improvement and alignment with the Company’s objectives.
+
+📌 Quality is the responsibility of **every employee at First Finance Company**.
+`
+},
+
 
   /* ═══════════════════════════════════════════════════════════════
    * COMPANY INFORMATION
@@ -789,6 +831,7 @@ Leading finance company recognized for progressive spirit, excellent service, ou
 
 📋 For Board & Management details, ask me directly!`
   },
+
 
   {
       category: "company_full_info",
@@ -1014,26 +1057,32 @@ All applications are **100% Shariah-compliant**.`
 
 Our Collections Department provides:
 
-📋 **Certificates & Documents:**
-- Liability / Replacement Certificates
-- Vehicle Lien Release
-- Traffic Department letters
-- Property mortgage release
-
-🚗 **Vehicle Services:**
-- Deregistration / title transfer
-- Vehicle export clearance
-
-💰 **Financial Services:**
-- Payment schedule changes
-- Cheque replacements
-- Bank payment orders
-
-⚖️ **Legal Services:**
-- Legal referrals
-- Dispute resolution support
-
-📞 **Contact Collections:** +974 4455 9999
+1.	Issuance of a Liability Certificate.
+2.	Issuance of a Replacement Certificate (lost/damaged).
+3.	Issuance of a Vehicle Lien Release prior to full finance settlement.
+4.	Issuance of a letter to the Traffic Department to transfer the vehicle number.
+5.	Referral of the customer to Legal Affairs.
+6.	Certificate for Vehicle Deregistration (cancellation).
+7.	Change of the customer’s payment account from one bank to another - Individuals.
+8.	Change of Payment Method.
+9.	Replacement of Guarantor.
+10.	Canceling a Previously Issued Bank Payment Order.
+11.	Installment Deferral Fee - Individuals.
+12.	Installment Deferral Fee - Companies.
+13.	Request to Amend a Bank Payment Order.
+14.	Request to Settle Arrears / Reschedule Indebtedness.
+15.	Transfer of Property/Vehicle Title from one person to another (with outstanding liabilities).
+16.	Issuance of a Vehicle Export (Exit) Certificate.
+17.	Issuance of a Multiple Vehicle Export (Exit) Certificate.
+18.	Change of the customer’s payment account from one bank to another — Companies.
+19.	Pledging Shares or Releasing a Share Pledge.
+20.	Issuance of a Property Mortgage Release — upon settlement of indebtedness.
+21.	for Replacing Cheques drawn on the same bank.
+22.	Vehicle Retrieval from customers (when the vehicle is surrendered at the customer’s request).
+23.	Signature Attestation for Title Deeds (registered / mortgaged).
+24.	Signature Attestation for other documents.
+25.	Issuing a Replacement Cheque for a lost cheque.
+26.	Settling Returned Cheques.
 
 All processes are **Shariah-compliant**.`
   },

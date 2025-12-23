@@ -14,7 +14,7 @@ import { findBestMatch, isFollowUp, extractProduct, extractNationality } from ".
 const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeScore: true };
 const fuse = new Fuse(knowledgeBase, fuseOptions);
 
-/* ----------  I18N  ---------- */
+
 const text = {
   en: {
     greeting: "Hi, Welcome to First Finance.\n I am Hadi your virtual assistant.",
@@ -71,7 +71,7 @@ const calculateEMI = (principal, months) => {
 
 
 export const checkEligibility = ({ product, nationality, age = 0, tenureMonths = 0, salary = 0, isTrainee = false ,userText = ""}) => {
-  // Normalize product and nationality
+  
   product = product?.toLowerCase() || "personal";
   const natKey = nationality === "Expat" ? "Expat" : "Qatari";  // Matches config exactly
 
@@ -82,13 +82,13 @@ export const checkEligibility = ({ product, nationality, age = 0, tenureMonths =
 
   const reasons = [];
 
-  // Minimum age (always 18 in your config)
+
   if (age > 0 && age < 18) {
     reasons.push(`Minimum age requirement is 18 years (you mentioned ${age} years).`);
   }
 
   if (rules.maxAgeEnd && age > 0 && tenureMonths > 0) {
-      const years = Math.ceil(tenureMonths / 12); // convert months → years correctly
+      const years = Math.ceil(tenureMonths / 12); 
       const ageAtEnd = age + years;
       if (ageAtEnd > rules.maxAgeEnd) {
           reasons.push(
@@ -99,12 +99,12 @@ export const checkEligibility = ({ product, nationality, age = 0, tenureMonths =
 
 
 
-  // Minimum salary (only for expats in some products)
+
   if (rules.minSalary && salary > 0 && salary < rules.minSalary) {
     reasons.push(`Minimum salary requirement is ${rules.minSalary.toLocaleString()} QAR (you mentioned ${salary.toLocaleString()} QAR).`);
   }
 
-  // Trainee rules (only defined for vehicle)
+  
   if (isTrainee || /trainee/i.test(userText)) {
     if (product === "vehicle") {
       if (natKey === "Expat" && rules.trainee?.allowed === false) {
@@ -115,12 +115,12 @@ export const checkEligibility = ({ product, nationality, age = 0, tenureMonths =
     }
   }
 
-  // Guarantor for expat personal finance
+  
   if (product === "personal" && natKey === "Expat" && rules.guarantorRequired) {
     reasons.push(`A Qatari guarantor is required for expats.`);
   }
 
-  // Down payment for services (expat)
+  
   if (product === "services" && natKey === "Expat" && rules.downPaymentRequired) {
     reasons.push(`A minimum ${rules.minDownPaymentPercent}% down payment is required for expats.`);
   }
@@ -155,7 +155,7 @@ const compareProducts = (products, nationality, salary = 0, tenureMonths = 0) =>
     response += `### ${c.product}\n${c.eligible ? '✅ Eligible' : '❌ Ineligible'}\n**Pros:**\n${c.pros.map(p => `- ${p}`).join('\n')}\n**Cons:**\n${c.cons.map(con => `- ${con}`).join('\n') || 'None major'}\n\n`;
   });
 
-  // Recommendation
+  
   const best = comparisons.reduce((prev, curr) => curr.pros.length > prev.pros.length ? curr : prev);
   response += `**Recommended:** ${best.product} (higher limits/flexibility for your profile).`;
 
@@ -207,8 +207,8 @@ useEffect(() => {
   if (lastBotMessage) {
     lastBotMessage.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
     
-    // Optional: add a small offset so it's not glued to the very top
-    window.scrollBy(0, -20); // adjust -20 if needed
+    
+    window.scrollBy(0, -20); 
   }
 }, [messages]);
 
@@ -221,10 +221,10 @@ useEffect(() => {
     return fn({ nationality: nat, salary: sal, jobDurationMonths: job, age });
   };
 
-  // Add this state if you don't have it already
+  
 const [kbReady, setKbReady] = useState(false);
 
-// In your useEffect that initializes KB:
+
 useEffect(() => {
   initKB().then(() => {
     console.log("✅ KB embeddings ready!");
@@ -233,13 +233,13 @@ useEffect(() => {
 }, []);
 
 const matchKnowledgeBase = (txt) => {
-  // Don't match KB if we're in a follow-up conversation about docs
+  
   const hasNationalityMemory = sessionMemory.has('nationality');
   const hasProductMemory = sessionMemory.has('product');
   const isFollowUp = /what about|how about|is this for|documents|docs/i.test(txt);
   
   if (hasNationalityMemory && hasProductMemory && isFollowUp) {
-    return null; // Skip KB, let the smarter handlers above deal with it
+    return null; 
   }
 
   const results = fuse.search(txt);
@@ -247,7 +247,7 @@ const matchKnowledgeBase = (txt) => {
   
   const best = results[0];
   
-  // Much stricter threshold
+  
   if (best.score > 0.7) return null;
   
   const raw = best.item.response;
@@ -290,7 +290,8 @@ const sendMessage = async (msgInput = input) => {
 - Friday: **Closed**
 
 📱 **Mobile App & Website:**
-Available **24/7** for your convenience!`);
+Available **24/7** for your convenience!
+All services are Shari'a-compliant financial services`);
   }
 
   //================Priority -0.5 Finance products shortcut =========
@@ -414,10 +415,10 @@ All services provided by First Finance Company are Shari'a-compliant financial s
       console.error("Gemini eligibility failed:", err);
     }
 
-    // Fallback only if Gemini completely fails
+    
     return push('bot', `I'd be happy to check your eligibility! Please call our team at **4455 9999** for a detailed assessment. They can review your complete financial profile and provide accurate guidance.\n\nAll our services are 100% Shariah-compliant.`);
   }
-  // ========== PRIORITY 1.7: COMPARISON QUESTIONS ==========
+  
  
 
 // ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
@@ -459,9 +460,6 @@ All services provided by First Finance Company are Shari'a-compliant financial s
     return handleFollowUpQuestion(userText, currentContext);
   }
 
-  // ========== PRIORITY 2.5: DOCUMENT REQUESTS ==========
-
-  // ========== PRIORITY 3: EXPECTING LOGIC ==========
 
 
   // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
@@ -685,7 +683,7 @@ async function classifyIntent(userText) {
 }
 
 
-// ==================== GEMINI INTENT CLASSIFIER ====================
+
 
 
 
@@ -911,7 +909,7 @@ Duration: ${months} months
           <div className="header-top">
             <div className="header-left">
               <div className="avatar">
-                <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/75e38749934537.56086db928f2d.jpg" alt="F" className="avatar-img" />
+                <img src="https://r6.cloud.yellow.ai/minio/uploads/c0c7f15b-0186-4735-9e78-b13885813d6c.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=r6ymblob%2F20251223%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251223T081402Z&X-Amz-Expires=60&X-Amz-SignedHeaders=host&X-Amz-Signature=53f517bf20a0ace645b88942cc87e082349fd4b103436d6321bf2b4a727269a1" alt="F" className="avatar-img" />
               </div>
               <div className="header-title">
                 <h1>First Finance</h1>
