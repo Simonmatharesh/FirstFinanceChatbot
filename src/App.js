@@ -10,6 +10,7 @@ import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";
 import { embedContent,initEmbedder} from "./embeddingAPI.js";
 import { findBestMatch, isFollowUp, extractProduct, extractNationality } from "./semanticSearch.js";
 
+
 /* ----------  CONFIG  ---------- */
 const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeScore: true };
 const fuse = new Fuse(knowledgeBase, fuseOptions);
@@ -189,10 +190,11 @@ export default function App() {
       { role: "faq", content: "", time },
     ]);
   }, [language, t.greeting]);
-useEffect(() => {
-  // Initialize embeddings on app load
-  initKB().then(() => console.log("✅ KB embeddings ready!")).catch(err => console.error("KB init failed:", err));
-}, []);
+
+  useEffect(() => {
+    // Initialize embeddings on app load
+    initKB().then(() => console.log("✅ KB embeddings ready!")).catch(err => console.error("KB init failed:", err));
+  }, []);
 
 
 
@@ -278,18 +280,18 @@ const sendMessage = async (msgInput = input) => {
   if (lower === "work hours" || lower === "working hours" || lower === "مواعيد العمل") {
     return push('bot', `**Branch Working Hours**
 
-🏢 **Main Branch (C-Ring Road):**
+ **Main Branch (C-Ring Road):**
 - Sunday – Wednesday: **7:30 AM – 7:00 PM**
 - Thursday: **7:30 AM – 2:30 PM**
 - Saturday: **8:00 AM – 1:00 PM**
 - Friday: **Closed**
 
-🏢 **Mawater Branch:**
+ **Mawater Branch:**
 - Sunday – Thursday: **4:30 PM – 9:30 PM**
 - Saturday: **4:30 PM – 7:00 PM**
 - Friday: **Closed**
 
-📱 **Mobile App & Website:**
+ **Mobile App & Website:**
 Available **24/7** for your convenience!
 All services are Shari'a-compliant financial services`);
   }
@@ -312,11 +314,6 @@ All services are Shari'a-compliant financial services`);
 
 All services provided by First Finance Company are Shari'a-compliant financial services.`);
   }
-  //priority
-  if (lower =="23062004"){
-    return push('bot',
-      '10/12/2003')
-  }
 
   // ========== PRIORITY 0: EMI FLOW ==========
   if (context.activeFlow === "EMI") {
@@ -335,16 +332,16 @@ All services provided by First Finance Company are Shari'a-compliant financial s
   // Update session memory BEFORE follow-up check
   if (detectedProduct) {
     sessionMemory.setLastProduct(detectedProduct);
-    console.log("📦 Product detected:", detectedProduct);
+    console.log("Product detected:", detectedProduct);
   }
   if (detectedNationality) {
     sessionMemory.set('nationality', detectedNationality);
-    console.log("🏳️ Nationality detected:", detectedNationality);
+    console.log("Nationality detected:", detectedNationality);
   }
 
   // ========== PRIORITY 1.5: ELIGIBILITY QUESTIONS ==========
   if (/maximum|max|minimum|min|how much.*can|what.*age|age.*limit|what's.*age|whats.*age/i.test(lower)) {
-    console.log("📊 Specific info question detected");
+    console.log(" Specific info question detected");
     
     const product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product');
     const nationality = detectedNationality || sessionMemory.get('nationality');
@@ -397,7 +394,7 @@ All services provided by First Finance Company are Shari'a-compliant financial s
   const hasEligibilityIntent = eligibilityKeywords.test(lower);
 
   if (hasEligibilityIntent) {
-    console.log("🎯 Complex eligibility question - routing to Gemini");
+    console.log("Complex eligibility question - routing to Gemini");
     
     // Let Gemini handle ALL eligibility questions
     try {
@@ -425,12 +422,12 @@ All services provided by First Finance Company are Shari'a-compliant financial s
   const isFollowUpMsg = isFollowUp(userText);
   const currentContext = sessionMemory.getContextSummary();
 
-  console.log("🔍 Current context:", currentContext);
-  console.log("❓ Is follow-up?", isFollowUpMsg);
+  console.log("Current context:", currentContext);
+  console.log("Is follow-up?", isFollowUpMsg);
 
   // SPECIAL CASE: Single word nationality response
   if (/^(qatari|expat|expatriate)$/i.test(userText.trim())) {
-    console.log("🏳️ Single-word nationality detected as follow-up");
+    console.log("Single-word nationality detected as follow-up");
     
     const nat = /expat|expatriate/i.test(userText) ? "Expat" : "Qatari";
     sessionMemory.set('nationality', nat);
@@ -456,7 +453,7 @@ All services provided by First Finance Company are Shari'a-compliant financial s
 
   // Handle follow-up if we have product OR topic in context
   if (isFollowUpMsg && (currentContext.product || currentContext.topic)) {
-    console.log("🔄 Follow-up detected!");
+    console.log("Follow-up detected!");
     return handleFollowUpQuestion(userText, currentContext);
   }
 
@@ -517,7 +514,7 @@ function handleFollowUpQuestion(userText, context) {
   const newNationality = extractNationality(userText);
   const newProduct = extractProduct(userText);
 
-  console.log("📋 Follow-up handler called with:", { 
+  console.log("Follow-up handler called with:", { 
     currentProduct: product, 
     currentNationality: nationality,
     currentTopic: topic,
@@ -529,19 +526,19 @@ function handleFollowUpQuestion(userText, context) {
   // Case 1: User asks about different nationality for SAME product
   // Example: User was discussing vehicle finance (expat), now asks "what about qatari"
   if (newNationality && product && !newProduct) {
-    console.log(`🔀 Switching nationality from ${nationality} to ${newNationality} for ${product}`);
+    console.log(`Switching nationality from ${nationality} to ${newNationality} for ${product}`);
     
     sessionMemory.set('nationality', newNationality);
     
     // Try to find specific nationality version first
     const specificCategory = `${product}_finance_${newNationality.toLowerCase()}`;
-    console.log("🔍 Looking for category:", specificCategory);
+    console.log("Looking for category:", specificCategory);
     
     let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
     
     // If not found, look for any entry with this product that has nationality in triggers
     if (!kbEntry) {
-      console.log("⚠️ Specific category not found, searching broader...");
+      console.log("Specific category not found, searching broader...");
       kbEntry = knowledgeBase.find(item => 
         item.category.includes(product.toLowerCase()) &&
         item.category.includes(newNationality.toLowerCase())
@@ -550,7 +547,7 @@ function handleFollowUpQuestion(userText, context) {
 
     // Last resort: find the product entry and call its response function
     if (!kbEntry) {
-      console.log("⚠️ Still not found, using product category...");
+      console.log("Still not found, using product category...");
       kbEntry = knowledgeBase.find(item => 
         item.category === `${product.toLowerCase()}_finance` ||
         item.category.startsWith(`${product.toLowerCase()}_finance`)
@@ -579,13 +576,13 @@ function handleFollowUpQuestion(userText, context) {
 
   // Case 2: User switches to different product (keeps nationality)
   if (newProduct && newProduct !== product) {
-    console.log(`🔀 Switching product from ${product} to ${newProduct}`);
+    console.log(`Switching product from ${product} to ${newProduct}`);
     
     sessionMemory.setLastProduct(newProduct);
     const useNationality = nationality || "Qatari";
     
     const specificCategory = `${newProduct}_finance_${useNationality.toLowerCase()}`;
-    console.log("🔍 Looking for category:", specificCategory);
+    console.log("Looking for category:", specificCategory);
     
     let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
     
@@ -621,7 +618,7 @@ function handleFollowUpQuestion(userText, context) {
   }
 
   // Fallback: use Gemini with context
-  console.log("⚠️ Follow-up handler couldn't resolve, falling back to Gemini");
+  console.log("Follow-up handler couldn't resolve, falling back to Gemini");
   
   askGemini(userText).then(response => {
     if (response) {
@@ -684,7 +681,14 @@ async function classifyIntent(userText) {
 
 
 
-
+const [userId] = useState(() => {
+  let id = localStorage.getItem('chatUserId');
+  if (!id) {
+    id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('chatUserId', id);
+  }
+  return id;
+});
 
 
 // ==================== SMART GEMINI QUERY ====================
@@ -699,7 +703,8 @@ async function askGemini(userText) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         message: userText,
-        context: contextSummary  // ✅ Send context to Gemini
+        context: contextSummary,
+        userId: userId  
       })
     });
     
@@ -909,7 +914,7 @@ Duration: ${months} months
           <div className="header-top">
             <div className="header-left">
               <div className="avatar">
-                <img src="https://r6.cloud.yellow.ai/minio/uploads/c0c7f15b-0186-4735-9e78-b13885813d6c.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=r6ymblob%2F20251223%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251223T081402Z&X-Amz-Expires=60&X-Amz-SignedHeaders=host&X-Amz-Signature=53f517bf20a0ace645b88942cc87e082349fd4b103436d6321bf2b4a727269a1" alt="F" className="avatar-img" />
+                <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/75e38749934537.56086db928f2d.jpg" alt="F" className="avatar-img" />
               </div>
               <div className="header-title">
                 <h1>First Finance</h1>

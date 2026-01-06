@@ -6,16 +6,17 @@ import dotenv from "dotenv";
 import { knowledgeBase } from "../src/knowledgeBase.js";
 import { pipeline } from "@xenova/transformers";
 import cosineSimilarity from "compute-cosine-similarity";
+import { sessionMemory } from './sessionMemory.js';
+
 
 dotenv.config();
-
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaF7AlqhN85cP8");
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -242,33 +243,41 @@ User message: `;
 
 
 app.post("/api/chat", async (req, res) => {
-  const { message, context } = req.body; 
+  const { message, userId } = req.body;
+  
 
   if (!message?.trim()) {
     return res.json({ interpretation: "Please type a message." });
   }
 
   console.log("User:", message);
-  console.log("Context:", context);
+
+  console.log("UserID:", userId);
 
   try {
     // 1️⃣ Generate embedding for the user message
     const userEmbedding = await embedText(message);
+    const userContextSummary = userId ? sessionMemory.getContextSummary(userId) : null;
+    console.log("Context:", userContextSummary); 
 
     // 2️⃣ Find best match in KB with context awareness
-    const bestMatch = findBestMatchWithContext(userEmbedding, context);
+    const bestMatch = findBestMatchWithContext(userEmbedding, userContextSummary);
     if (bestMatch) {
       console.log("KB match:", bestMatch.triggers[0]);
       
       // Handle dynamic responses
       const response = typeof bestMatch.response === "function" 
         ? bestMatch.response({ 
-            nationality: context?.nationality || "Qatari", 
+            nationality: userContextSummary?.nationality || "Qatari", 
             salary: 0, 
             jobDurationMonths: 0, 
             age: 0 
           })
         : bestMatch.response;
+
+         if (userId) {
+        sessionMemory.addToHistory(userId, message, response);
+      }
       
       return res.json({ interpretation: response });
     }
@@ -280,14 +289,14 @@ app.post("/api/chat", async (req, res) => {
         const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
         const currentLanguage = hasArabic ? "Arabic" : "English";
 
-        if (context) {
+        if (userContextSummary) {
           contextPrompt = `${SYSTEM_PROMPT}
 
     **CONVERSATION CONTEXT (for reference only):**
-    ${context.topic ? `- Current topic: ${context.topic}` : ''}
-    ${context.product ? `- Last product discussed: ${context.product}` : ''}
-    ${context.nationality ? `- User nationality: ${context.nationality}` : ''}
-    ${context.recentMessages ? `- Recent conversation:\n${context.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+   ${userContextSummary.topic ? `- Current topic: ${userContextSummary.topic}` : ''}
+    ${userContextSummary.product ? `- Last product discussed: ${userContextSummary.product}` : ''}
+    ${userContextSummary.nationality ? `- User nationality: ${userContextSummary.nationality}` : ''}
+    ${userContextSummary.recentMessages ? `- Recent conversation:\n${userContextSummary.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
 
     **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
     **YOU MUST RESPOND IN: ${currentLanguage}**
@@ -310,6 +319,9 @@ app.post("/api/chat", async (req, res) => {
       .trim();
 
     console.log("Gemini reply:", botReply);
+        if (userId) {
+      sessionMemory.addToHistory(userId, message, botReply);
+    }
     res.json({ interpretation: botReply });
 
   } catch (error) {
@@ -320,7 +332,7 @@ app.post("/api/chat", async (req, res) => {
 
 
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, context, threshold = 0.95) {
+function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.95) {
   let best = null;
   let highestScore = -1;
 
@@ -330,18 +342,18 @@ function findBestMatchWithContext(userEmbedding, context, threshold = 0.95) {
     let score = cosineSimilarity(userEmbedding, item.embedding);
 
     // Boost score if item matches current context
-    if (context?.topic && item.category?.includes(context.topic)) {
+    if (userContextSummary?.topic && item.category?.includes(userContextSummary.topic)) {
       score += 0.15;
     }
 
-    if (context?.product && item.category?.includes(context.product)) {
+    if (userContextSummary?.product && item.category?.includes(userContextSummary.product)) {
       score += 0.1; // Reduced from 0.12
     }
 
     // CRITICAL FIX: Boost nationality match, PENALIZE wrong nationality
-    if (context?.nationality) {
+    if (userContextSummary?.nationality) {
       const itemLower = item.category?.toLowerCase() || '';
-      const contextNat = context.nationality.toLowerCase();
+      const contextNat = userContextSummary.nationality.toLowerCase();
       
       if (itemLower.includes(contextNat)) {
         score += 0.2; // Strong boost for correct nationality

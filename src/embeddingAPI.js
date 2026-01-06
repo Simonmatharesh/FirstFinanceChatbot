@@ -1,12 +1,12 @@
 
-// embeddings.js (or wherever you keep this)
+// embeddings.js 
 import { pipeline } from "@xenova/transformers";
 
 let embedder = null;
 
 export async function initEmbedder() {
   if (embedder) return;
-  // ✅ Use the ONNX web-ready model id
+  // Use the ONNX web-ready model id
   embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
 }
 
@@ -19,7 +19,7 @@ export async function embedContent(texts) {
   const results = [];
 
   for (const t of input) {
-    // ✅ Mean pooling + L2 normalize gives a sentence-level vector
+    //  Mean pooling + L2 normalize gives a sentence-level vector
     const tensor = await embedder(t, { pooling: "mean", normalize: true });
     const vector = tensor.tolist(); // <-- plain number[]
     results.push(vector);

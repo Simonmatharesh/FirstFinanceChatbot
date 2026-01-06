@@ -55,7 +55,7 @@ All services are **100% Shariah-compliant**.`;
     triggers: [
       "car loan expat", "vehicle loan expat", "vehicle finance expat", 
       "expat vehicle", "expat car loan", "car finance expatriate",
-      "vehicle financing expat", "resident car loan","vehicle finance","Vehicle financing"
+      "vehicle financing expat", "resident car loan","vehicle finance","Vehicle financing","vehicle finance non qatari"
     ],
     response: () => `
 **Vehicle Finance Details (Expat/Residents)**
@@ -108,6 +108,9 @@ All services are **100% Shariah-compliant**.`
 - Repayment period: Up to **72 months** + 3 months grace
 - Grace period: Up to **3 months**
 - Debt-to-salary ratio: ≤ **75%**
+-	Takaful insurance on the finance.
+-	Minimum age of 18 and maximum age of 65.
+-	No administrative fees on the financing.
 - **No guarantor required**
 
 **Required Documents:**
@@ -135,6 +138,8 @@ All services are **100% Shariah-compliant**.`
 - Grace period: Up to **3 months**
 - Debt-to-salary ratio: ≤ **50%**
 - **Qatari guarantor required**
+-	Minimum salary requirement: 10,000 Qatari Riyals.
+-	Minimum customer age of 18 years and maximum customer age of 60 years by the end of the finance.
 
 **Required Documents:**
 - Recent salary certificate
@@ -438,7 +443,12 @@ A financing solution that enables Qatari companies to purchase goods **locally a
     "non qatari goods finance",
     "foreign company goods finance",
     "goods finance for expat companies",
-    "trade finance foreign company",
+    "corporate goods finance expat",
+    "corporate goods finance non qatari",
+    "goods finance expat",
+    "goods finance non qatari",
+    "trade finance expat",
+    "inventory finance expat",
     "تمويل البضائع للشركات غير القطرية"
   ],
   response: `
@@ -810,10 +820,10 @@ Senior Management, in cooperation with all FFC employees, conducts periodic revi
     response: `
 **First Finance Company**
 
-🏛️ **Established:** November 1999
-📊 **First** finance company in Qatar regulated by **Qatar Central Bank**
-💰 **Share Capital:** QAR 50M → QAR 639M by 2009
-🏢 **Ownership:** Acquired by Dukhan Bank in 2010
+ **Established:** November 1999
+ **First** finance company in Qatar regulated by **Qatar Central Bank**
+ **Share Capital:** QAR 50M → QAR 639M by 2009
+ **Ownership:** Acquired by Dukhan Bank in 2010
 
 **Mission:**
 ✓ Become the most recommended finance company in Qatar
@@ -821,6 +831,7 @@ Senior Management, in cooperation with all FFC employees, conducts periodic revi
 ✓ Attract top talent and maintain engaging work environment
 ✓ Grow profitable and sustainable businesses
 ✓ Contribute to community development and economic prosperity
+✓ To uphold and reinforce traditional values while, at the same time, embracing technology and progressive ideas.
 
 **Vision:**
 Leading finance company recognized for progressive spirit, excellent service, outstanding results, and community contribution.
@@ -829,7 +840,7 @@ Leading finance company recognized for progressive spirit, excellent service, ou
 ✅ ISO 9001:2015 certified
 ✅ **100% Shariah-compliant services**
 
-📋 For Board & Management details, ask me directly!`
+ For Board & Management details, ask me directly!`
   },
 
 
@@ -952,8 +963,8 @@ The current profit rates at First Finance Company are determined by a **set of c
 - Market conditions
 
 **For Precise Rates:**
-📞 Visit a branch or contact our call center at **+974 4455 9999**
-💼 Speak with a finance specialist for a personalized quote
+ Visit a branch or contact our call center at **+974 4455 9999**
+ Speak with a finance specialist for a personalized quote
 
 **Note:** All services provided by First Finance Company are **100% Shariah-compliant** financial services.`
   },
@@ -962,7 +973,7 @@ The current profit rates at First Finance Company are determined by a **set of c
    * SERVICES & SUPPORT
    * ═══════════════════════════════════════════════════════════════ */
 
-  {
+{
     category: "contact",
     triggers: [
       "contact", "phone", "call", "email", "location", "address",
@@ -977,18 +988,18 @@ The current profit rates at First Finance Company are determined by a **set of c
 
 **Branch Locations:**
 
-🏢 **Main Branch:**
+ **Main Branch:**
 C-Ring Road, Building 321 (next to Turkish Hospital)
 
-🏢 **Mawater Branch:**
+ **Mawater Branch:**
 Umm Ghuwailina
 
 **Digital Services:**
-💬 **Live Chat:** Available 24/7 on our website
-📱 **Mobile App:** Available 24/7 (iOS & Android)
+ **Live Chat:** Available 24/7 on our website
+ **Mobile App:** Available 24/7 (iOS & Android)
 
 We're here to help!`
-  },
+},
 
   {
     category: "working_hours",
@@ -999,18 +1010,18 @@ We're here to help!`
     response: `
 **Branch Working Hours**
 
-🏢 **Main Branch (C-Ring Road):**
+ **Main Branch (C-Ring Road):**
 - Sunday – Wednesday: **7:30 AM – 7:00 PM**
 - Thursday: **7:30 AM – 2:30 PM**
 - Saturday: **8:00 AM – 1:00 PM**
 - Friday: **Closed**
 
-🏢 **Mawater Branch:**
+ **Mawater Branch:**
 - Sunday – Thursday: **4:30 PM – 9:30 PM**
 - Saturday: **4:30 PM – 7:00 PM**
 - Friday: **Closed**
 
-📱 **Mobile App & Website:**
+ **Mobile App & Website:**
 Available **24/7** for your convenience!`
   },
 
@@ -1034,10 +1045,10 @@ Available **24/7** for your convenience!`
 ✅ Upload documents instantly
 ✅ Get instant pre-approval
 
-💻 **Website:**
+ **Website:**
 Apply online at **https://ffcqatar.com** (available 24/7)
 
-🏢 **Visit a Branch:**
+ **Visit a Branch:**
 - Main Branch: C-Ring Road
 - Mawater Branch: Umm Ghuwailina
 
@@ -1103,7 +1114,7 @@ All processes are **Shariah-compliant**.`
 - Governmental & Semi-Government entities
 - Companies listed on Qatar Stock Exchange (QSE)
 
-📋 **Level 2: Non-Accredited (Loans > 150,000 QAR)**
+ **Level 2: Non-Accredited (Loans > 150,000 QAR)**
 Required documents:
 - Accreditation form
 - National address certificate
@@ -1111,7 +1122,7 @@ Required documents:
 - Commercial registration/license
 - Owner(s) Qatar ID
 
-📋 **Level 3: Non-Accredited (Car Loans < 150,000 QAR)**
+ **Level 3: Non-Accredited (Car Loans < 150,000 QAR)**
 Required:
 - Commercial registration/license/ID
 - Company ≥ **3 years** established
@@ -1156,8 +1167,8 @@ Would you like to start an EMI calculation?`;
       return `
 **Preliminary Finance Details**
 
-💰 **Finance Amount:** ${amount.toLocaleString()} QAR
-📅 **Duration:** ${tenure} months
+ **Finance Amount:** ${amount.toLocaleString()} QAR
+ **Duration:** ${tenure} months
 
 **Payment Schedule:**
 - **Total Payable:** ${totalPayable.toFixed(2)} QAR
@@ -1166,9 +1177,9 @@ Would you like to start an EMI calculation?`;
 - **First Installment:** ${new Date(firstInstallmentDate).toLocaleDateString()}
 - **Last Installment:** ${lastInstallmentDate}
 
-⚠️ *This is a preliminary calculation only. Terms and conditions apply.*
+ *This is a preliminary calculation only. Terms and conditions apply.*
 
-📞 For exact profit rates, contact us at **+974 4455 9999**`;
+ For exact profit rates, contact us at **+974 4455 9999**`;
     }
   },
   {
