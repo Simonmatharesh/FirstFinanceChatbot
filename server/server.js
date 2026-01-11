@@ -7,6 +7,7 @@ import { knowledgeBase } from "../src/knowledgeBase.js";
 import { pipeline } from "@xenova/transformers";
 import cosineSimilarity from "compute-cosine-similarity";
 import { sessionMemory } from './sessionMemory.js';
+import rateLimit from 'express-rate-limit'; 
 
 
 dotenv.config();
@@ -16,7 +17,44 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaF7AlqhN85cP8");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIz7AlqhN85cP8");
+
+// ✅ GLOBAL RATE LIMIT: 4 requests per minute TOTAL (all users combined)
+const globalChatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 4, // ONLY 4 TOTAL requests per minute across ALL users
+  keyGenerator: () => 'global', // Same key for everyone = shared limit
+  skipSuccessfulRequests: false,
+  handler: (req, res) => {
+    console.log(`🚨 GLOBAL rate limit hit! Too many users sending messages.`);
+    res.status(429).json({ 
+      interpretation: "Our service is currently busy. Please wait a moment and try again." 
+    });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ✅ NEW: API Usage Tracking
+const apiUsage = {
+  requestsToday: 0,
+  lastReset: Date.now(),
+  DAILY_LIMIT: 2000 // Adjust based on your Gemini quota
+};
+
+function checkDailyQuota() {
+  const now = Date.now();
+  // Reset counter every 24 hours
+  if (now - apiUsage.lastReset > 24 * 60 * 60 * 1000) {
+    console.log(`📊 Daily quota reset. Previous usage: ${apiUsage.requestsToday}`);
+    apiUsage.requestsToday = 0;
+    apiUsage.lastReset = now;
+  }
+
+  return apiUsage.requestsToday < apiUsage.DAILY_LIMIT;
+}
+
+
 
 const KNOWLEDGE = knowledgeBase
   .map(item => `Q: ${item.triggers.join(" | ")}\nA: ${item.response}`)
@@ -203,7 +241,6 @@ Never repeat the same question (“which product?”) if the user already answer
 
     **IMPORTANT:** If the user asks about app login, registration, technical support, or app features, reply: "For app registration and technical support, please visit our website at https://ffcqatar.com or call 4455 9999. I can help with finance products, eligibility, and general inquiries."
 ━━━━━━━━━━
-━━━━━━━━━━
 🔹 **7. CRITICAL ELIGIBILITY RULES**
 
 When users ask about eligibility ("Can I get...", "Am I eligible...", "I already have..."), you MUST:
@@ -242,12 +279,32 @@ When users ask about eligibility ("Can I get...", "Am I eligible...", "I already
 User message: `;
 
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", globalChatLimiter ,async (req, res) => {
   const { message, userId } = req.body;
   
 
   if (!message?.trim()) {
     return res.json({ interpretation: "Please type a message." });
+  }
+
+  // ✅ NEW: Validate userId format
+  if (!userId || typeof userId !== 'string' || userId.length > 150) {
+    return res.status(400).json({ interpretation: "Invalid request." });
+  }
+
+  // ✅ NEW: Check daily API quota
+  if (!checkDailyQuota()) {
+    console.log('🚨 Daily API quota exceeded!');
+    return res.status(503).json({ 
+      interpretation: "Our service is experiencing high demand. Please try again later or contact support at 4455 9999." 
+    });
+  }
+
+  // ✅ NEW: Validate message length
+  if (message.length > 1000) {
+    return res.status(400).json({ 
+      interpretation: "Your message is too long. Please keep it under 1000 characters." 
+    });
   }
 
   console.log("User:", message);
@@ -304,11 +361,13 @@ app.post("/api/chat", async (req, res) => {
     User message: ${message}`;
     }
 
-    // 4️⃣ Ask Gemini with context
+    
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
     });
+    // Increment API usage counter
+    apiUsage.requestsToday++;
     
     const result = await model.generateContent(contextPrompt);
     const parts = result.response.candidates?.[0]?.content?.parts || [];
@@ -328,6 +387,36 @@ app.post("/api/chat", async (req, res) => {
     console.error("Error:", error.message);
     res.json({ interpretation: "Sorry, I'm having trouble right now. Please try again." });
   }
+});
+
+//  Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok",
+    activeSessions: sessionMemory.sessions.size,
+    apiUsageToday: apiUsage.requestsToday,
+    dailyLimit: apiUsage.DAILY_LIMIT,
+    uptime: process.uptime()
+  });
+});
+
+//  Admin stats endpoint (protect this in production!)
+app.get("/api/stats", (req, res) => {
+  const sessions = Array.from(sessionMemory.sessions.entries()).map(([id, session]) => ({
+    userId: id.substring(0, 20) + '...', // Hide full ID
+    lastActivity: new Date(session.lastActivity).toISOString(),
+    messageCount: session.conversationState.conversationHistory.length
+  }));
+
+  res.json({
+    totalSessions: sessionMemory.sessions.size,
+    apiUsage: {
+      today: apiUsage.requestsToday,
+      limit: apiUsage.DAILY_LIMIT,
+      percentage: ((apiUsage.requestsToday / apiUsage.DAILY_LIMIT) * 100).toFixed(1) + '%'
+    },
+    sessions: sessions.slice(0, 10) // Only show first 10
+  });
 });
 
 
@@ -464,12 +553,15 @@ function findBestMatch(userEmbedding, threshold = 0.9) {
 
 const PORT = 3001;
 
-// ✅ Only start server after embeddings are ready
+// start server after embeddings are ready
 (async () => {
   await initEmbedder();
   await initKB();
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Daily API limit: ${apiUsage.DAILY_LIMIT}`);
+    console.log(`GLOBAL rate limit: 4 requests/min TOTAL (all users combined)`);
+    console.log(`Session cleanup: Active (every 5 min)`);
     console.log("Gemini + Knowledge Base RAG is ACTIVE");
   });
 })();
