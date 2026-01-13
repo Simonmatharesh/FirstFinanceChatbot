@@ -17,9 +17,9 @@ app.use(express.json());
 
 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIz7AlqhN85cP8");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ✅ GLOBAL RATE LIMIT: 4 requests per minute TOTAL (all users combined)
+//  GLOBAL RATE LIMIT: 4 requests per minute TOTAL (all users combined)
 const globalChatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute window
   max: 4, // ONLY 4 TOTAL requests per minute across ALL users
@@ -35,7 +35,7 @@ const globalChatLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ✅ NEW: API Usage Tracking
+//  NEW: API Usage Tracking
 const apiUsage = {
   requestsToday: 0,
   lastReset: Date.now(),
