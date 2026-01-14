@@ -1,19 +1,10 @@
 // App.js  
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { knowledgeBase } from "./knowledgeBase";
-import Fuse from "fuse.js";
-
-import { sessionMemory } from './sessionMemory';
-import { emiRates, eligibilityRules, requiredDocs } from './config';
-import { initKB, kbWithEmbeddings } from "./kbWithEmbeddings.js";
-import { embedContent,initEmbedder} from "./embeddingAPI.js";
-import { findBestMatch, isFollowUp, extractProduct, extractNationality } from "./semanticSearch.js";
 
 
 /* ----------  CONFIG  ---------- */
 const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeScore: true };
-const fuse = new Fuse(knowledgeBase, fuseOptions);
 
 
 const text = {
@@ -43,24 +34,7 @@ const extractAmount = (t) => {
   const m = t.match(/(\d{3,})\s*(qar)?/i);
   return m ? parseInt(m[1], 10) : null;
 };
-const extractMonths = (t) => {
-  const m = t.match(/(\d+)\s*months?/i);
-  return m ? parseInt(m[1], 10) : null;
-};
-const extractAge = (text) => {
-  const match = text.match(/\b(\d{2})\s*(?:years?|yo|y\.?o\.?)\b/i);
-  return match ? parseInt(match[1], 10) : null;
-};
 
-const extractSalary = (text) => {
-  const match = text.match(/salary.*?(\d{3,})/i) || text.match(/(\d{4,})\s*(?:qar|riyals?)/i);
-  return match ? parseInt(match[1].replace(/\D/g, ""), 10) : null;
-};
-
-const extractTenureYears = (text) => {
-  const match = text.match(/(\d+)\s*years?/i);
-  return match ? parseInt(match[1], 10) * 12 : null;
-};
 
 
 /* ----------  EMI CORE  ---------- */
@@ -70,98 +44,6 @@ const calculateEMI = (principal, months) => {
   return { emi: Math.round((totalPayable / months) * 100) / 100, total: Math.round(totalPayable) };
 };
 
-
-export const checkEligibility = ({ product, nationality, age = 0, tenureMonths = 0, salary = 0, isTrainee = false ,userText = ""}) => {
-  
-  product = product?.toLowerCase() || "personal";
-  const natKey = nationality === "Expat" ? "Expat" : "Qatari";  // Matches config exactly
-
-  const rules = eligibilityRules[product]?.[natKey];
-  if (!rules) {
-    return { eligible: false, reasons: ["This product is not available for your nationality profile."] };
-  }
-
-  const reasons = [];
-
-
-  if (age > 0 && age < 18) {
-    reasons.push(`Minimum age requirement is 18 years (you mentioned ${age} years).`);
-  }
-
-  if (rules.maxAgeEnd && age > 0 && tenureMonths > 0) {
-      const years = Math.ceil(tenureMonths / 12); 
-      const ageAtEnd = age + years;
-      if (ageAtEnd > rules.maxAgeEnd) {
-          reasons.push(
-              `Age at the end of the finance period must not exceed ${rules.maxAgeEnd} years (you would be ${ageAtEnd} years old).`
-          );
-      }
-  }
-
-
-
-
-  if (rules.minSalary && salary > 0 && salary < rules.minSalary) {
-    reasons.push(`Minimum salary requirement is ${rules.minSalary.toLocaleString()} QAR (you mentioned ${salary.toLocaleString()} QAR).`);
-  }
-
-  
-  if (isTrainee || /trainee/i.test(userText)) {
-    if (product === "vehicle") {
-      if (natKey === "Expat" && rules.trainee?.allowed === false) {
-        reasons.push(`Trainees are not eligible for vehicle finance as an expat.`);
-      } else if (natKey === "Qatari" && rules.trainee?.allowed === true) {
-        reasons.push(`Trainees may be eligible with: ${rules.trainee.conditions}.`);
-      }
-    }
-  }
-
-  
-  if (product === "personal" && natKey === "Expat" && rules.guarantorRequired) {
-    reasons.push(`A Qatari guarantor is required for expats.`);
-  }
-
-  
-  if (product === "services" && natKey === "Expat" && rules.downPaymentRequired) {
-    reasons.push(`A minimum ${rules.minDownPaymentPercent}% down payment is required for expats.`);
-  }
-
-  if (reasons.length > 0) {
-    return { eligible: false, reasons };
-  }
-
-  return { eligible: true, reason: "You appear to meet the basic eligibility criteria based on the information provided." };
-};
-
-const compareProducts = (products, nationality, salary = 0, tenureMonths = 0) => {
-  const comparisons = products.map(prod => {
-    const elig = checkEligibility({ product: prod, nationality, salary, tenureMonths });
-    const rules = eligibilityRules[prod.toLowerCase()]?.Retail?.[nationality.toLowerCase()];
-    return {
-      product: prod,
-      eligible: elig.eligible,
-      pros: [
-        `Max Amount: ${rules?.maxAmount.toLocaleString()} QAR`,
-        `Tenure: Up to ${rules?.maxPeriodMonths} months`,
-        `DSR Limit: ${rules?.maxDebtRatio * 100}%`,
-        rules?.guarantorRequired ? '' : 'No guarantor needed',
-        rules?.downPaymentPercent ? `Down Payment: ${rules.downPaymentPercent}%` : 'No down payment'
-      ].filter(Boolean),
-      cons: elig.reasons || (elig.eligible ? [] : ['Ineligible based on profile'])
-    };
-  });
-
-  let response = '**Loan Comparison**\n\n';
-  comparisons.forEach(c => {
-    response += `### ${c.product}\n${c.eligible ? '✅ Eligible' : '❌ Ineligible'}\n**Pros:**\n${c.pros.map(p => `- ${p}`).join('\n')}\n**Cons:**\n${c.cons.map(con => `- ${con}`).join('\n') || 'None major'}\n\n`;
-  });
-
-  
-  const best = comparisons.reduce((prev, curr) => curr.pros.length > prev.pros.length ? curr : prev);
-  response += `**Recommended:** ${best.product} (higher limits/flexibility for your profile).`;
-
-  return response;
-};
 
 /* ----------  COMPONENT  ---------- */
 export default function App() {
@@ -191,10 +73,7 @@ export default function App() {
     ]);
   }, [language, t.greeting]);
 
-  useEffect(() => {
-    // Initialize embeddings on app load
-    initKB().then(() => console.log("✅ KB embeddings ready!")).catch(err => console.error("KB init failed:", err));
-  }, []);
+ 
 
 
 
@@ -215,46 +94,14 @@ useEffect(() => {
 }, [messages]);
 
   /* ----------  KB EXECUTE  ---------- */
-  const runKbFunction = (fn, userText) => {
-    const nat = extractNationality(userText);
-    const sal = extractAmount(userText) ?? 0;
-    const job = extractMonths(userText)  ?? 0;
-    const age = (userText.match(/\b(\d{2})\s*y/i) ? parseInt(userText.match(/\b(\d{2})\s*y/i)[1], 10) : 0) ?? 0;
-    return fn({ nationality: nat, salary: sal, jobDurationMonths: job, age });
-  };
-
-  
-const [kbReady, setKbReady] = useState(false);
 
 
-useEffect(() => {
-  initKB().then(() => {
-    console.log("✅ KB embeddings ready!");
-    setKbReady(true);
-  }).catch(err => console.error("KB init failed:", err));
-}, []);
 
-const matchKnowledgeBase = (txt) => {
-  
-  const hasNationalityMemory = sessionMemory.has('nationality');
-  const hasProductMemory = sessionMemory.has('product');
-  const isFollowUp = /what about|how about|is this for|documents|docs/i.test(txt);
-  
-  if (hasNationalityMemory && hasProductMemory && isFollowUp) {
-    return null; 
-  }
 
-  const results = fuse.search(txt);
-  if (!results.length) return null;
-  
-  const best = results[0];
-  
-  
-  if (best.score > 0.7) return null;
-  
-  const raw = best.item.response;
-  return typeof raw === "function" ? runKbFunction(raw, txt) : raw;
-};
+
+
+
+
 
   /* ----------  EMI FLOW  ---------- */
   const updateContext = (upd) => setContext((c) => ({ ...c, ...upd }));
@@ -326,178 +173,20 @@ All services provided by First Finance Company are Shari'a-compliant financial s
   }
 
   // ========== PRIORITY 1: EXTRACT CONTEXT FIRST ==========
-  const detectedProduct = extractProduct(userText);
-  const detectedNationality = extractNationality(userText);
 
-  // Update session memory BEFORE follow-up check
-  if (detectedProduct) {
-    sessionMemory.setLastProduct(detectedProduct);
-    console.log("Product detected:", detectedProduct);
-  }
-  if (detectedNationality) {
-    sessionMemory.set('nationality', detectedNationality);
-    console.log("Nationality detected:", detectedNationality);
-  }
 
-  // ========== PRIORITY 1.5: ELIGIBILITY QUESTIONS ==========
-  if (/maximum|max|minimum|min|how much.*can|what.*age|age.*limit|what's.*age|whats.*age/i.test(lower)) {
-    console.log(" Specific info question detected");
-    
-    const product = detectedProduct || sessionMemory.getLastProduct() || sessionMemory.get('product');
-    const nationality = detectedNationality || sessionMemory.get('nationality');
-    
-    // Age questions
-    if (/age.*limit|maximum.*age|max.*age|what.*age|age.*requirement/i.test(lower)) {
-      if (!product) {
-        return push('bot', `**Age Requirements:**\n\n**Qatari:**\n• Vehicle: 18-65 years\n• Personal: 18-65 years\n• Housing: 18-65 years\n• Services: 18-65 years\n\n**Expat:**\n• Vehicle: 18-60 years\n• Personal: 18-60 years\n• Housing: 18-65 years\n• Services: 18-60 years\n\nWhich product are you asking about?`);
-      }
-      
-      const ages = {
-        vehicle: { Qatari: "18-65 years", Expat: "18-60 years" },
-        personal: { Qatari: "18-65 years", Expat: "18-60 years" },
-        housing: { Qatari: "18-65 years", Expat: "18-65 years" },
-        services: { Qatari: "18-65 years", Expat: "18-60 years" }
-      };
-      
-      const prodLower = product.toLowerCase();
-      if (nationality) {
-        return push('bot', `**Maximum age for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance (${nationality}):** ${ages[prodLower]?.[nationality]}\n\nAll services are 100% Shariah-compliant.`);
-      } else {
-        return push('bot', `**Age Requirements for ${product.charAt(0).toUpperCase() + product.slice(1)} Finance:**\n\n• Qatari: ${ages[prodLower]?.Qatari}\n• Expat: ${ages[prodLower]?.Expat}\n\nAre you Qatari or Expat?`);
-      }
-    }
-    
-    // Maximum amount questions
-    if (/maximum|max.*amount|max.*finance|how much.*get|finance.*limit/i.test(lower)) {
-      if (!product) {
-        return push('bot', `**Maximum Finance Amounts:**\n\n**Qatari:**\n• Vehicle: 2,000,000 QAR\n• Personal: 2,000,000 QAR\n• Housing: Based on property value\n• Services: 2,000,000 QAR\n\n**Expat:**\n• Vehicle: 400,000 QAR\n• Personal: 200,000 QAR\n• Housing: Based on property value\n• Services: Varies\n\nWhich product interests you?`);
-      }
-      
-      const amounts = {
-        vehicle: { Qatari: "2,000,000 QAR", Expat: "400,000 QAR" },
-        personal: { Qatari: "2,000,000 QAR", Expat: "200,000 QAR" },
-        
-        services: { Qatari: "2,000,000 QAR", Expat: "Varies by service" }
-      };
-      
-      const prodLower = product.toLowerCase();
-      if (nationality) {
-        return push('bot', `**Maximum ${product.charAt(0).toUpperCase() + product.slice(1)} Finance for ${nationality}:** ${amounts[prodLower]?.[nationality]}\n\nAll services are 100% Shariah-compliant.`);
-      } else {
-        return push('bot', `**Maximum ${product.charAt(0).toUpperCase() + product.slice(1)} Finance:**\n\n• Qatari: ${amounts[prodLower]?.Qatari}\n• Expat: ${amounts[prodLower]?.Expat}\n\nAre you Qatari or Expat?`);
-      }
-    }
-  }
 
 // ========== PRIORITY 1.6: ELIGIBILITY QUESTIONS (GEMINI-POWERED) ==========
-  const eligibilityKeywords = /can i (get|apply)|am i eligible|do i qualify|can.*apply for|eligible for|qualify for|options for|already have/i;
-  const hasEligibilityIntent = eligibilityKeywords.test(lower);
-
-  if (hasEligibilityIntent) {
-    console.log("Complex eligibility question - routing to Gemini");
-    
-    // Let Gemini handle ALL eligibility questions
-    try {
-      const geminiResponse = await askGemini(userText);
-      if (geminiResponse && geminiResponse.length > 10) {
-        sessionMemory.addToHistory(userText, geminiResponse);
-        
-        // Update session memory with detected entities
-        if (detectedNationality) sessionMemory.set('nationality', detectedNationality);
-        if (detectedProduct) sessionMemory.setLastProduct(detectedProduct);
-        
-        return push('bot', geminiResponse);
-      }
-    } catch (err) {
-      console.error("Gemini eligibility failed:", err);
-    }
-
-    
-    return push('bot', `I'd be happy to check your eligibility! Please call our team at **4455 9999** for a detailed assessment. They can review your complete financial profile and provide accurate guidance.\n\nAll our services are 100% Shariah-compliant.`);
-  }
   
- 
-
-// ========== PRIORITY 2: FOLLOW-UP DETECTION ==========
-  const isFollowUpMsg = isFollowUp(userText);
-  const currentContext = sessionMemory.getContextSummary();
-
-  console.log("Current context:", currentContext);
-  console.log("Is follow-up?", isFollowUpMsg);
-
-  // SPECIAL CASE: Single word nationality response
-  if (/^(qatari|expat|expatriate)$/i.test(userText.trim())) {
-    console.log("Single-word nationality detected as follow-up");
-    
-    const nat = /expat|expatriate/i.test(userText) ? "Expat" : "Qatari";
-    sessionMemory.set('nationality', nat);
-    
-    const lastProduct = sessionMemory.getLastProduct() || sessionMemory.get('product');
-    
-    if (lastProduct) {
-      // Find KB entry for this product + nationality
-      const category = `${lastProduct}_finance_${nat.toLowerCase()}`;
-      const kbEntry = knowledgeBase.find(k => k.category === category);
-      
-      if (kbEntry) {
-        const response = typeof kbEntry.response === "function"
-          ? kbEntry.response({ nationality: nat, salary: 0, jobDurationMonths: 0, age: 0 })
-          : kbEntry.response;
-        
-        sessionMemory.setCurrentTopic(category);
-        sessionMemory.addToHistory(userText, response, category);
-        return push('bot', response);
-      }
-    }
-  }
-
-  // Handle follow-up if we have product OR topic in context
-  if (isFollowUpMsg && (currentContext.product || currentContext.topic)) {
-    console.log("Follow-up detected!");
-    return handleFollowUpQuestion(userText, currentContext);
-  }
-
 
 
   // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
-  try {
-    await initEmbedder();
-    const userEmbedding = await embedContent(userText);
-    
-    const contextSummary = {
-      topic: sessionMemory.getCurrentTopic(),
-      product: sessionMemory.getLastProduct(),
-      nationality: sessionMemory.get('nationality')
-    };
-
-    const match = findBestMatch(userEmbedding, kbWithEmbeddings, contextSummary, 0.55);
-    
-    if (match) {
-      console.log("✅ KB match:", match.triggers[0], "Score:", match.score);
-      
-      // Update topic tracking
-      if (match.category) {
-        sessionMemory.setCurrentTopic(match.category);
-      }
-
-      const response = typeof match.response === "function" 
-        ? runKbFunction(match.response, userText)
-        : match.response;
-      
-      // Track conversation
-      sessionMemory.addToHistory(userText, response, match.category);
-      
-      return push('bot', response);
-    }
-  } catch (err) {
-    console.error("Embedding search failed:", err);
-  }
 
   // ========== PRIORITY 5: GEMINI ==========
   try {
     const geminiResponse = await askGemini(userText);
     if (geminiResponse && geminiResponse.length > 10) {
-      sessionMemory.addToHistory(userText, geminiResponse);
+      
       return push('bot', geminiResponse);
     }
   } catch (err) {
@@ -509,175 +198,11 @@ All services provided by First Finance Company are Shari'a-compliant financial s
 };
 
 // ========== FIXED FOLLOW-UP HANDLER ==========
-function handleFollowUpQuestion(userText, context) {
-  const { topic, product, nationality } = context;
-  const newNationality = extractNationality(userText);
-  const newProduct = extractProduct(userText);
 
-  console.log("Follow-up handler called with:", { 
-    currentProduct: product, 
-    currentNationality: nationality,
-    currentTopic: topic,
-    newNationality, 
-    newProduct,
-    userText
-  });
-
-  // Case 1: User asks about different nationality for SAME product
-  // Example: User was discussing vehicle finance (expat), now asks "what about qatari"
-  if (newNationality && product && !newProduct) {
-    console.log(`Switching nationality from ${nationality} to ${newNationality} for ${product}`);
-    
-    sessionMemory.set('nationality', newNationality);
-    
-    // Try to find specific nationality version first
-    const specificCategory = `${product}_finance_${newNationality.toLowerCase()}`;
-    console.log("Looking for category:", specificCategory);
-    
-    let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
-    
-    // If not found, look for any entry with this product that has nationality in triggers
-    if (!kbEntry) {
-      console.log("Specific category not found, searching broader...");
-      kbEntry = knowledgeBase.find(item => 
-        item.category.includes(product.toLowerCase()) &&
-        item.category.includes(newNationality.toLowerCase())
-      );
-    }
-
-    // Last resort: find the product entry and call its response function
-    if (!kbEntry) {
-      console.log("Still not found, using product category...");
-      kbEntry = knowledgeBase.find(item => 
-        item.category === `${product.toLowerCase()}_finance` ||
-        item.category.startsWith(`${product.toLowerCase()}_finance`)
-      );
-    }
-
-    if (kbEntry) {
-      console.log("✅ Found KB entry:", kbEntry.category);
-      
-      const response = typeof kbEntry.response === "function"
-        ? kbEntry.response({ 
-            nationality: newNationality, 
-            salary: 0, 
-            jobDurationMonths: 0, 
-            age: 0 
-          })
-        : kbEntry.response;
-      
-      sessionMemory.addToHistory(userText, response, kbEntry.category);
-      sessionMemory.setCurrentTopic(kbEntry.category);
-      return push('bot', response);
-    }
-    
-    console.error("❌ No KB entry found for:", { product, newNationality });
-  }
-
-  // Case 2: User switches to different product (keeps nationality)
-  if (newProduct && newProduct !== product) {
-    console.log(`Switching product from ${product} to ${newProduct}`);
-    
-    sessionMemory.setLastProduct(newProduct);
-    const useNationality = nationality || "Qatari";
-    
-    const specificCategory = `${newProduct}_finance_${useNationality.toLowerCase()}`;
-    console.log("Looking for category:", specificCategory);
-    
-    let kbEntry = knowledgeBase.find(item => item.category === specificCategory);
-    
-    if (!kbEntry) {
-      kbEntry = knowledgeBase.find(item => 
-        item.category.includes(newProduct.toLowerCase()) &&
-        item.category.includes(useNationality.toLowerCase())
-      );
-    }
-
-    if (!kbEntry) {
-      kbEntry = knowledgeBase.find(item => 
-        item.category === `${newProduct.toLowerCase()}_finance`
-      );
-    }
-
-    if (kbEntry) {
-      console.log("✅ Found KB entry:", kbEntry.category);
-      
-      const response = typeof kbEntry.response === "function"
-        ? kbEntry.response({ 
-            nationality: useNationality, 
-            salary: 0, 
-            jobDurationMonths: 0, 
-            age: 0 
-          })
-        : kbEntry.response;
-      
-      sessionMemory.addToHistory(userText, response, kbEntry.category);
-      sessionMemory.setCurrentTopic(kbEntry.category);
-      return push('bot', response);
-    }
-  }
-
-  // Fallback: use Gemini with context
-  console.log("Follow-up handler couldn't resolve, falling back to Gemini");
-  
-  askGemini(userText).then(response => {
-    if (response) {
-      sessionMemory.addToHistory(userText, response);
-      push('bot', response);
-    } else {
-      push('bot', "Could you please be more specific? What would you like to know?");
-    }
-  }).catch(err => {
-    console.error("Gemini fallback failed:", err);
-    push('bot', "Could you please be more specific? What would you like to know?");
-  });
-}
 
 // ==================== INTENT CLASSIFIER ====================
 
-async function classifyIntent(userText) {
-  const lower = userText.toLowerCase();
-  
-  // High-confidence patterns
-  if (/hi|hello|hey|good morning|good evening|what can you (help|do)/i.test(userText)) {
-    return { type: "GREETING", confidence: 1.0 };
-  }
-  
-  if (/document|docs|required|paperwork|what.*bring|what.*need|approval/i.test(lower)) {
-    return { 
-      type: "DOCUMENT_REQUEST", 
-      confidence: 0.9,
-      entities: {
-        nationality: extractNationality(userText),
-        product: extractProduct(userText)
-      }
-    };
-  }
-  
-  if (/is (this|it|that) (for|about)/i.test(lower)) {
-    return { type: "CLARIFICATION", confidence: 0.95 };
-  }
-  
-  if (/what about|how about/i.test(lower)) {
-    return { 
-      type: "PRODUCT_SWITCH", 
-      confidence: 0.9,
-      entities: { product: extractProduct(userText) }
-    };
-  }
-  
-  if (/emi|instalment|monthly|what.*pay|how much.*month/i.test(lower)) {
-    return { type: "EMI_QUERY", confidence: 0.85 };
-  }
-  
-  // General info queries
-  if (/tell me|what.*you|about|services|options|financing|products|profit|rate|insurance|difference|can.*get|do you offer/i.test(lower)) {
-    return { type: "GENERAL_INFO", confidence: 0.8 };
-  }
-  
-  // Default to general info
-  return { type: "GENERAL_INFO", confidence: 0.5 };
-}
+
 
 
 
@@ -695,7 +220,7 @@ const [userId] = useState(() => {
 async function askGemini(userText) {
   try {
     // Get conversation context
-    const contextSummary = sessionMemory.getContextSummary();
+  
     
     // Send context to server
     const res = await fetch('http://localhost:3001/api/chat', {
@@ -703,7 +228,7 @@ async function askGemini(userText) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         message: userText,
-        context: contextSummary,
+        
         userId: userId  
       })
     });
@@ -716,71 +241,6 @@ async function askGemini(userText) {
   }
 }
 
-// ==================== INTENT HANDLERS ====================
-
-
-function handleClarification(userText, intent) {
-  const lastEMI = sessionMemory.get('lastEMI');
-  const nat = sessionMemory.get('nationality');
-  const prod = sessionMemory.get('product');
-  
-  if (lastEMI) {
-    return push('bot', `The ${lastEMI.product} information I shared is for **${lastEMI.nationality}** clients.`);
-  } else if (nat && prod) {
-    return push('bot', `The ${prod} information I shared is for **${nat}** clients.`);
-  } else {
-    return push('bot', `I can provide information for both Qatari and Expat clients. Which applies to you?`);
-  }
-}
-
-function handleProductSwitch(userText, intent) {
-  const newProd = intent.entities?.product || extractProduct(userText);
-  
-  if (newProd && sessionMemory.has('nationality')) {
-    sessionMemory.set('product', newProd);
-    const nat = sessionMemory.get('nationality');
-    
-    return push('bot');
-  }
-  
-  return push('bot', "Which product would you like to know about? (Vehicle, Personal, Services, or Housing)");
-}
-
-function handleEMIQuery(userText, intent) {
-  const lastEMI = sessionMemory.get('lastEMI');
-  
-  if (lastEMI) {
-    return push('bot', `Your ${lastEMI.product} EMI is **${lastEMI.emi.toLocaleString()} QAR/month** over ${lastEMI.months} months.`);
-  }
-  
-  return push('bot', "Would you like me to calculate an EMI for you? Just say 'calculate EMI' to start.");
-}
-
-async function handleGeneralInfo(userText, intent) {
-  // Use Gemini for general questions
-  const response = await askGemini(userText);
-  if (response) {
-    return push('bot', response);
-  }
-  return push('bot', t.fallback);
-}
-
-// ==================== HELPERS ====================
-function extractProduct(text) {
-  const lower = text.toLowerCase();
-  
-  // Don't extract product from questions ABOUT products
-  if (/is (personal|vehicle|housing|service)|same as|difference|what.*personal|tell me about/i.test(lower)) {
-    return null;
-  }
-  
-  if (/vehicle|car/i.test(lower)) return "vehicle";
-  if (/personal/i.test(lower)) return "personal";
-  if (/service/i.test(lower)) return "services";
-  if (/housing|home|property/i.test(lower)) return "housing";
-  
-  return null;
-}
 
 
 function handleEMIFlow(userText, time) {
@@ -861,19 +321,6 @@ function handleEMIFlow(userText, time) {
         total
       };
       
-      let emis = sessionMemory.get('EMIs') || [];
-      const existingIndex = emis.findIndex(e => e.product === newEmiData.product);
-      
-      if (existingIndex >= 0) {
-        emis[existingIndex] = emiRecord;
-      } else {
-        emis.push(emiRecord);
-      }
-      
-      sessionMemory.set('EMIs', emis);
-      sessionMemory.set('lastEMI', emiRecord);
-      sessionMemory.set('nationality', emiRecord.nationality);
-      sessionMemory.set('product', emiRecord.product);
 
       const today = new Date();
       const firstInstallment = new Date(today.getFullYear(), today.getMonth() + 1, 1);

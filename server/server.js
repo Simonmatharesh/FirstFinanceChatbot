@@ -8,12 +8,63 @@ import { pipeline } from "@xenova/transformers";
 import cosineSimilarity from "compute-cosine-similarity";
 import { sessionMemory } from './sessionMemory.js';
 import rateLimit from 'express-rate-limit'; 
+import helmet from 'helmet';
 
 
 dotenv.config();
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ Missing GEMINI_API_KEY in .env file');
+  process.exit(1);
+}
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+
+
+
+// 1. SECURITY HEADERS
+
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable if causing issues, enable in production
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+
+// 2. CORS CONFIGURATION (RESTRICTED)
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, same-origin)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log(`🚫 Blocked request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
+
+
+// 3. REQUEST SIZE LIMITS
+
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+
+
 
 
 
@@ -311,82 +362,108 @@ app.post("/api/chat", globalChatLimiter ,async (req, res) => {
 
   console.log("UserID:", userId);
 
-  try {
-    // 1️⃣ Generate embedding for the user message
-    const userEmbedding = await embedText(message);
-    const userContextSummary = userId ? sessionMemory.getContextSummary(userId) : null;
-    console.log("Context:", userContextSummary); 
-
-    // 2️⃣ Find best match in KB with context awareness
-    const bestMatch = findBestMatchWithContext(userEmbedding, userContextSummary);
-    if (bestMatch) {
-      console.log("KB match:", bestMatch.triggers[0]);
-      
-      // Handle dynamic responses
-      const response = typeof bestMatch.response === "function" 
-        ? bestMatch.response({ 
-            nationality: userContextSummary?.nationality || "Qatari", 
-            salary: 0, 
-            jobDurationMonths: 0, 
-            age: 0 
-          })
-        : bestMatch.response;
-
-         if (userId) {
-        sessionMemory.addToHistory(userId, message, response);
-      }
-      
-      return res.json({ interpretation: response });
+try {
+  // 1️⃣ Extract intent BEFORE embedding
+  const intent = extractIntent(message);
+  
+  // 2️⃣ Get current context
+  const userContextSummary = userId ? sessionMemory.getContextSummary(userId) : null;
+  
+  // 3️⃣ Update context with new intent data
+  if (userId) {
+    if (intent.nationality) {
+      sessionMemory.set(userId, 'nationality', intent.nationality);
+      console.log(`📌 Set nationality: ${intent.nationality}`);
     }
-
-    // 3️⃣ Build context-aware prompt for Gemini
-    let contextPrompt = SYSTEM_PROMPT + message;
-    
-    // Detect current message language
-        const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
-        const currentLanguage = hasArabic ? "Arabic" : "English";
-
-        if (userContextSummary) {
-          contextPrompt = `${SYSTEM_PROMPT}
-
-    **CONVERSATION CONTEXT (for reference only):**
-   ${userContextSummary.topic ? `- Current topic: ${userContextSummary.topic}` : ''}
-    ${userContextSummary.product ? `- Last product discussed: ${userContextSummary.product}` : ''}
-    ${userContextSummary.nationality ? `- User nationality: ${userContextSummary.nationality}` : ''}
-    ${userContextSummary.recentMessages ? `- Recent conversation:\n${userContextSummary.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
-
-    **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
-    **YOU MUST RESPOND IN: ${currentLanguage}**
-
-    User message: ${message}`;
+    if (intent.product) {
+      sessionMemory.setLastProduct(userId, intent.product);
+      console.log(`📌 Set product: ${intent.product}`);
     }
-
-    
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
-    });
-    // Increment API usage counter
-    apiUsage.requestsToday++;
-    
-    const result = await model.generateContent(contextPrompt);
-    const parts = result.response.candidates?.[0]?.content?.parts || [];
-
-    const botReply = parts
-      .map(p => p.text || "")
-      .join(" ")
-      .trim();
-
-    console.log("Gemini reply:", botReply);
-        if (userId) {
-      sessionMemory.addToHistory(userId, message, botReply);
+    if (intent.topic) {
+      sessionMemory.setCurrentTopic(userId, intent.topic);
+      console.log(`📌 Set topic: ${intent.topic}`);
     }
-    res.json({ interpretation: botReply });
-
-  } catch (error) {
-    console.error("Error:", error.message);
-    res.json({ interpretation: "Sorry, I'm having trouble right now. Please try again." });
   }
+  
+  // 4️⃣ Get UPDATED context (includes new intent data)
+  const updatedContext = userId ? sessionMemory.getContextSummary(userId) : null;
+  console.log("Context:", updatedContext);
+
+  // 5️⃣ Generate embedding for the user message
+  const userEmbedding = await embedText(message);
+
+  // 6️⃣ Find best match in KB with context awareness
+  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext);
+  if (bestMatch) {
+    console.log("KB match:", bestMatch.triggers[0]);
+    
+    // Handle dynamic responses
+    const response = typeof bestMatch.response === "function" 
+      ? bestMatch.response({ 
+          nationality: updatedContext?.nationality || "Qatari", 
+          salary: 0, 
+          jobDurationMonths: 0, 
+          age: 0 
+        })
+      : bestMatch.response;
+
+    if (userId) {
+      sessionMemory.addToHistory(userId, message, response);
+    }
+    
+    return res.json({ interpretation: response });
+  }
+
+  // 7️⃣ Build context-aware prompt for Gemini
+  let contextPrompt = SYSTEM_PROMPT + message;
+  
+  // Detect current message language
+  const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
+  const currentLanguage = hasArabic ? "Arabic" : "English";
+
+  if (updatedContext && (updatedContext.nationality || updatedContext.product || updatedContext.recentMessages?.length)) {
+    contextPrompt = `${SYSTEM_PROMPT}
+
+**CONVERSATION CONTEXT (for reference only):**
+${updatedContext.topic ? `- Current topic: ${updatedContext.topic}` : ''}
+${updatedContext.product ? `- Last product discussed: ${updatedContext.product}` : ''}
+${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality}` : ''}
+${updatedContext.recentMessages?.length ? `- Recent conversation:\n${updatedContext.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+
+**CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+**YOU MUST RESPOND IN: ${currentLanguage}**
+
+User message: ${message}`;
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+  });
+  
+  // Increment API usage counter
+  apiUsage.requestsToday++;
+  
+  const result = await model.generateContent(contextPrompt);
+  const parts = result.response.candidates?.[0]?.content?.parts || [];
+
+  const botReply = parts
+    .map(p => p.text || "")
+    .join(" ")
+    .trim();
+
+  console.log("Gemini reply:", botReply);
+  
+  if (userId) {
+    sessionMemory.addToHistory(userId, message, botReply);
+  }
+  
+  res.json({ interpretation: botReply });
+
+} catch (error) {
+  console.error("Error:", error.message);
+  res.json({ interpretation: "Sorry, I'm having trouble right now. Please try again." });
+}
 });
 
 //  Health check endpoint
@@ -418,6 +495,57 @@ app.get("/api/stats", (req, res) => {
     sessions: sessions.slice(0, 10) // Only show first 10
   });
 });
+
+// ===== ADD THIS FUNCTION AT THE TOP OF server.js =====
+function extractIntent(message) {
+  const lower = message.toLowerCase();
+  const intent = {
+    nationality: null,
+    product: null,
+    topic: null
+  };
+
+  // Extract nationality
+  if (/\b(i am|i'm|im)\s+(a\s+)?(qatari|qatar national)/i.test(lower)) {
+    intent.nationality = "Qatari";
+  } else if (/\b(i am|i'm|im)\s+(an\s+)?(expat|expatriate|resident|foreigner)/i.test(lower)) {
+    intent.nationality = "Expat";
+  }
+
+  // Extract product
+  if (/\b(vehicle|car|auto|motorcycle|marine|boat)\s*(finance|loan|financing)?/i.test(lower)) {
+    intent.product = "vehicle";
+    intent.topic = "vehicle_finance";
+  } else if (/\bpersonal\s*(finance|loan|financing)/i.test(lower)) {
+    intent.product = "personal";
+    intent.topic = "personal_finance";
+  } else if (/\b(housing|home|property|real estate)\s*(finance|loan|financing)?/i.test(lower)) {
+    intent.product = "housing";
+    intent.topic = "housing_finance";
+  } else if (/\b(service|services|travel|education|wedding|healthcare)\s*(finance|loan|financing)?/i.test(lower)) {
+    intent.product = "services";
+    intent.topic = "services_finance";
+  } else if (/\b(corporate|company|business)\s*(finance|loan|financing)?/i.test(lower)) {
+    intent.product = "corporate";
+    intent.topic = "corporate_finance";
+  }
+
+  // Extract from document requests
+  if (/documents?\s+(for|needed|required)/i.test(lower)) {
+    if (!intent.product && /vehicle|car/i.test(lower)) {
+      intent.product = "vehicle";
+      intent.topic = "vehicle_finance";
+    } else if (!intent.product && /personal/i.test(lower)) {
+      intent.product = "personal";
+      intent.topic = "personal_finance";
+    } else if (!intent.product && /housing|home/i.test(lower)) {
+      intent.product = "housing";
+      intent.topic = "housing_finance";
+    }
+  }
+
+  return intent;
+}
 
 
 // Helper: Find best match with context boosting
