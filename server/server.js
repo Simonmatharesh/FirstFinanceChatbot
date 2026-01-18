@@ -367,27 +367,32 @@ try {
   const intent = extractIntent(message);
   
   // 2️⃣ Get current context
-  const userContextSummary = userId ? sessionMemory.getContextSummary(userId) : null;
+  const existingContext = userId ? sessionMemory.getContextSummary(userId) : null;
   
   // 3️⃣ Update context with new intent data
-  if (userId) {
-    if (intent.nationality) {
-      sessionMemory.set(userId, 'nationality', intent.nationality);
-      console.log(`📌 Set nationality: ${intent.nationality}`);
+    if (userId) {
+      // Only update nationality if new intent has it, OR keep existing
+      if (intent.nationality) {
+        sessionMemory.set(userId, 'nationality', intent.nationality);
+        console.log(`📌 Set nationality: ${intent.nationality}`);
+      } else if (existingContext?.nationality) {
+        console.log(`♻️ Keeping existing nationality: ${existingContext.nationality}`);
+      }
+      
+      if (intent.product) {
+        sessionMemory.setLastProduct(userId, intent.product);
+        console.log(`📌 Set product: ${intent.product}`);
+      }
+      
+      if (intent.topic) {
+        sessionMemory.setCurrentTopic(userId, intent.topic);
+        console.log(`📌 Set topic: ${intent.topic}`);
+      }
     }
-    if (intent.product) {
-      sessionMemory.setLastProduct(userId, intent.product);
-      console.log(`📌 Set product: ${intent.product}`);
-    }
-    if (intent.topic) {
-      sessionMemory.setCurrentTopic(userId, intent.topic);
-      console.log(`📌 Set topic: ${intent.topic}`);
-    }
-  }
   
   // 4️⃣ Get UPDATED context (includes new intent data)
-  const updatedContext = userId ? sessionMemory.getContextSummary(userId) : null;
-  console.log("Context:", updatedContext);
+    const updatedContext = userId ? sessionMemory.getContextSummary(userId) : null;
+    console.log("📊 Final context:", updatedContext);
 
   // 5️⃣ Generate embedding for the user message
   const userEmbedding = await embedText(message);
@@ -505,14 +510,31 @@ function extractIntent(message) {
     topic: null
   };
 
-  // Extract nationality
-  if (/\b(i am|i'm|im)\s+(a\s+)?(qatari|qatar national)/i.test(lower)) {
-    intent.nationality = "Qatari";
-  } else if (/\b(i am|i'm|im)\s+(an\s+)?(expat|expatriate|resident|foreigner)/i.test(lower)) {
+  // ============================================
+  // NATIONALITY DETECTION - IMPROVED
+  // ============================================
+  
+  // Method 1: "I am/I'm [something] expat/qatari"
+  if (/\b(i am|i'm|im)\b.*\b(expat|expatriate|resident|foreigner)\b/i.test(lower)) {
     intent.nationality = "Expat";
+  } else if (/\b(i am|i'm|im)\b.*\b(qatari|qatar national)\b/i.test(lower)) {
+    intent.nationality = "Qatari";
+  }
+  
+  // Method 2: Direct mention without "I am"
+  else if (/\b(expat|expatriate|resident|foreigner)\b/i.test(lower) && 
+           !/\bfor\s+(expat|qatari)\b/i.test(lower)) {
+    // Only if not asking "for expat" (which is a question, not identity)
+    intent.nationality = "Expat";
+  } else if (/\b(qatari|qatar national)\b/i.test(lower) && 
+             !/\bfor\s+(expat|qatari)\b/i.test(lower)) {
+    intent.nationality = "Qatari";
   }
 
-  // Extract product
+  // ============================================
+  // PRODUCT DETECTION - UNCHANGED
+  // ============================================
+  
   if (/\b(vehicle|car|auto|motorcycle|marine|boat)\s*(finance|loan|financing)?/i.test(lower)) {
     intent.product = "vehicle";
     intent.topic = "vehicle_finance";
@@ -530,7 +552,7 @@ function extractIntent(message) {
     intent.topic = "corporate_finance";
   }
 
-  // Extract from document requests
+  // Document requests
   if (/documents?\s+(for|needed|required)/i.test(lower)) {
     if (!intent.product && /vehicle|car/i.test(lower)) {
       intent.product = "vehicle";
@@ -544,9 +566,9 @@ function extractIntent(message) {
     }
   }
 
+  console.log(`🔍 Extracted intent:`, intent);
   return intent;
 }
-
 
 // Helper: Find best match with context boosting
 function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.95) {
