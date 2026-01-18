@@ -8,7 +8,7 @@ import cosineSimilarity from "compute-cosine-similarity";
  * @param {Object} contextSummary - Current conversation context
  * @param {number} threshold - Minimum score threshold
  */
-export function findBestMatch(userEmbedding, kbWithEmbeddings, contextSummary = {}, threshold = 0.45) {
+export function findBestMatch(userEmbedding, kbWithEmbeddings, contextSummary = {}, threshold = 0.70) {
   let bestItem = null;
   let bestScore = -1;
 

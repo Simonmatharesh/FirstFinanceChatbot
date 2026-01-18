@@ -56,6 +56,8 @@ export default function App() {
     emiData: { category: "", nationality: "", product: "", amount: 0, tenureMonths: 0 },
   });
 
+  const [isLoading, setIsLoading] = useState(false);
+
   
   const scrollRef = useRef(null);
   const t = text[language];
@@ -181,20 +183,25 @@ All services provided by First Finance Company are Shari'a-compliant financial s
 
 
   // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
+// ========== PRIORITY 5: GEMINI ==========
+setIsLoading(true);  // ← START LOADING
 
-  // ========== PRIORITY 5: GEMINI ==========
-  try {
-    const geminiResponse = await askGemini(userText);
-    if (geminiResponse && geminiResponse.length > 10) {
-      
-      return push('bot', geminiResponse);
-    }
-  } catch (err) {
-    console.error("Gemini failed:", err);
+try {
+  const geminiResponse = await askGemini(userText);
+  
+  setIsLoading(false);  // ← STOP LOADING (got response)
+  
+  if (geminiResponse && geminiResponse.length > 10) {
+    return push('bot', geminiResponse);
   }
+} catch (err) {
+  console.error("Gemini failed:", err);
+  setIsLoading(false);  // ← STOP LOADING (on error)
+}
 
-  // ========== FALLBACK ==========
-  return push('bot', t.fallback);
+// ========== FALLBACK ==========
+setIsLoading(false);  // ← STOP LOADING (fallback)
+return push('bot', t.fallback);
 };
 
 // ========== FIXED FOLLOW-UP HANDLER ==========
@@ -405,6 +412,16 @@ Duration: ${months} months
               </div>
             )
           )}
+          
+          {/* ⭐ NEW: Loading indicator - ONLY shows when isLoading is true */}
+          {isLoading && (
+            <div className="message bot animate-in">
+              <div className="typing-indicator">
+                <div className="dot-elastic"></div>
+              </div>
+            </div>
+          )}
+          
           <div ref={scrollRef} />
         </div>
 
