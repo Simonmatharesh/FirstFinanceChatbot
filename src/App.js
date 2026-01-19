@@ -10,7 +10,7 @@ const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeSc
 const text = {
   en: {
     greeting: "Hi, Welcome to First Finance.\n I am Hadi your virtual assistant.",
-    welcome: "I'm here to help with Shariah-compliant financing.",
+    welcome: "Shariah-compliant financing.",
     placeholder: "Type your message...",
     fallback: "I am not able to get your query, please try rephrasing your query. I can help with queries regarding monthly payment calculations, required documents, finance application and other products.",
     cancelEMI: "Got it! I've cancelled the EMI calculation.\n\nHow else can I help you today?",
@@ -57,6 +57,9 @@ export default function App() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false);
+  const [chatMinimized, setChatMinimized] = useState(false);
+  const [hasShownSurvey, setHasShownSurvey] = useState(false);
 
   
   const scrollRef = useRef(null);
@@ -223,6 +226,24 @@ const [userId] = useState(() => {
 });
 
 
+const handleCloseChatClick = () => {
+  // Check if user had meaningful conversation (3+ messages)
+  const userMessages = messages.filter(m => m.role === 'user');
+  
+  console.log('Close clicked. User messages:', userMessages.length, 'Has shown survey:', hasShownSurvey);
+  
+  if (userMessages.length >= 1 && !hasShownSurvey) {
+    // Show survey FIRST, then mark as shown
+    setShowFeedbackSurvey(true);
+    setHasShownSurvey(true);
+    console.log('Showing feedback survey');
+  } else {
+    // Just minimize/close
+    setChatMinimized(true);
+    console.log('Minimizing chat');
+  }
+};
+
 // ==================== SMART GEMINI QUERY ====================
 async function askGemini(userText) {
   try {
@@ -360,26 +381,80 @@ Duration: ${months} months
 }
 
   /* ----------  RENDER  ---------- */
-  return (
-    <div className={`app-container ${language === "ar"}`} dir={language === "ar"}>
+/* ----------  RENDER  ---------- */
+return (
+ <div
+  className={`app-container ${language === "ar" ? "rtl" : ""}`}
+  dir={language === "ar" ? "rtl" : "ltr"}
+>
+
+    
+    {chatMinimized ? (
+      <button
+        onClick={() => setChatMinimized(false)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          width: '60px',
+          height: '60px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #00b368, #00925e)',
+          border: 'none',
+          color: 'white',
+          fontSize: '24px',
+          cursor: 'pointer',
+          boxShadow: '0 8px 25px rgba(0, 179, 104, 0.4)',
+          zIndex: 1000
+        }}
+      >
+        💬
+      </button>
+    ) : (
       <div className="chat-box">
         {/* HEADER */}
-        <div className="chat-header">
-          <div className="header-top">
-            <div className="header-left">
-              <div className="avatar">
-                <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/75e38749934537.56086db928f2d.jpg" alt="F" className="avatar-img" />
-              </div>
-              <div className="header-title">
-                <h1>First Finance</h1>
-                <div className="header-status">{t.welcome}</div>
-              </div>
-            </div>
-            <button className="lang-toggle" onClick={() => setLanguage((l) => (l === "en" ? "ar" : "en"))}>
-              {language === "en" ? "العربية" : "English"}
-            </button>
-          </div>
-        </div>
+ <div className="chat-header">
+  <div className="header-top">
+    <div className="header-left">
+      <div className="avatar">
+        <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/75e38749934537.56086db928f2d.jpg" alt="F" className="avatar-img" />
+      </div>
+      <div className="header-title">
+        <h1>First Finance</h1>
+        <div className="header-status">{t.welcome}</div>
+      </div>
+    </div>
+    
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <button className="lang-toggle" onClick={() => setLanguage((l) => (l === "en" ? "ar" : "en"))}>
+        {language === "en" ? "العربية" : "English"}
+      </button>
+      
+      <button
+        onClick={handleCloseChatClick}
+        style={{
+          background: 'rgba(255, 255, 255, 0.2)',
+          border: 'none',
+          color: 'white',
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          fontSize: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.3s ease',
+          fontWeight: 'bold'
+        }}
+        onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+        onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+      >
+        ×
+      </button>
+    </div>
+  </div>
+</div>
 
         {/* MESSAGES */}
         <div className="messages">
@@ -424,6 +499,7 @@ Duration: ${months} months
           
           <div ref={scrollRef} />
         </div>
+        
 
         {/* INPUT */}
         <div className="input-area">
@@ -438,6 +514,335 @@ Duration: ${months} months
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white" />
             </svg>
+          </button>
+        </div>
+</div>
+)}
+
+
+    {showFeedbackSurvey && (
+      <FeedbackSurvey
+        language={language}
+        onClose={() => {
+          setShowFeedbackSurvey(false);
+          setChatMinimized(true);
+        }}
+      />
+    )}
+  </div>
+);
+}
+
+function FeedbackSurvey({ language, onClose }) {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [answers, setAnswers] = useState({
+    satisfaction: null,
+    knowledge: null,
+    helpfulness: null,
+    resolved: null,
+    suggestions: ''
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const questions = {
+    1: {
+      en: "How satisfied were you with Hadi's overall assistance?",
+      ar: "ما مدى رضاك عن المساعدة الشاملة التي قدمها هادي؟",
+      key: 'satisfaction',
+      scale: [
+        { value: 5, labelEn: 'Very Satisfied', labelAr: 'راضٍ جداً', color: '#00b368' },
+        { value: 4, labelEn: 'Satisfied', labelAr: 'راضٍ', color: '#4ade80' },
+        { value: 3, labelEn: 'Neutral', labelAr: 'محايد', color: '#fbbf24' },
+        { value: 2, labelEn: 'Dissatisfied', labelAr: 'غير راضٍ', color: '#fb923c' },
+        { value: 1, labelEn: 'Very Dissatisfied', labelAr: 'غير راضٍ إطلاقاً', color: '#ef4444' }
+      ]
+    },
+    2: {
+      en: "How satisfied were you with Hadi's knowledge of First Finance products?",
+      ar: "ما مدى رضاك عن معرفة هادي بمنتجات فرست فاينانس؟",
+      key: 'knowledge',
+      scale: [
+        { value: 5, labelEn: 'Very Satisfied', labelAr: 'راضٍ جداً', color: '#00b368' },
+        { value: 4, labelEn: 'Satisfied', labelAr: 'راضٍ', color: '#4ade80' },
+        { value: 3, labelEn: 'Neutral', labelAr: 'محايد', color: '#fbbf24' },
+        { value: 2, labelEn: 'Dissatisfied', labelAr: 'غير راضٍ', color: '#fb923c' },
+        { value: 1, labelEn: 'Very Dissatisfied', labelAr: 'غير راضٍ إطلاقاً', color: '#ef4444' }
+      ]
+    },
+    3: {
+      en: "How satisfied were you with Hadi's helpfulness and friendliness?",
+      ar: "ما مدى رضاك عن مدى المساعدة والود؟",
+      key: 'helpfulness',
+      scale: [
+        { value: 5, labelEn: 'Very Satisfied', labelAr: 'راضٍ جداً', color: '#00b368' },
+        { value: 4, labelEn: 'Satisfied', labelAr: 'راضٍ', color: '#4ade80' },
+        { value: 3, labelEn: 'Neutral', labelAr: 'محايد', color: '#fbbf24' },
+        { value: 2, labelEn: 'Dissatisfied', labelAr: 'غير راضٍ', color: '#fb923c' },
+        { value: 1, labelEn: 'Very Dissatisfied', labelAr: 'غير راضٍ إطلاقاً', color: '#ef4444' }
+      ]
+    },
+    4: {
+      en: "Was your question or issue resolved?",
+      ar: "هل تم حل سؤالك أو مشكلتك؟",
+      key: 'resolved',
+      scale: [
+        { value: 'yes', labelEn: 'Yes', labelAr: 'نعم', color: '#00b368' },
+        { value: 'no', labelEn: 'No', labelAr: 'لا', color: '#ef4444' }
+      ]
+    }
+  };
+
+  const totalSteps = Object.keys(questions).length + 1;
+
+  const handleAnswer = (key, value) => {
+    setAnswers(prev => ({ ...prev, [key]: value }));
+    setTimeout(() => {
+      if (currentStep < totalSteps) {
+        setCurrentStep(currentStep + 1);
+      }
+    }, 300);
+  };
+
+  const handleSubmit = () => {
+    console.log('Feedback submitted:', answers);
+    setSubmitted(true);
+    setTimeout(() => onClose(), 2000);
+  };
+
+  const canSubmit = answers.satisfaction && answers.knowledge && answers.helpfulness && answers.resolved;
+
+  if (submitted) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', zIndex: 99999, padding: '20px', animation: 'fadeIn 0.3s ease'
+      }}>
+        <div style={{
+          background: 'white', borderRadius: '20px', padding: '50px 40px',
+          maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          textAlign: 'center', animation: 'slideUp 0.4s ease'
+        }}>
+          <div style={{ 
+            width: '80px', height: '80px', margin: '0 auto 24px',
+            background: 'linear-gradient(135deg, #00b368, #00925e)',
+            borderRadius: '50%', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', animation: 'scaleIn 0.5s ease'
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', marginBottom: '12px' }}>
+            {language === 'ar' ? 'شكراً لك!' : 'Thank You!'}
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '16px', lineHeight: '1.5' }}>
+            {language === 'ar' ? 'تم استلام ملاحظاتك' : 'Your feedback has been received'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentStep];
+  const isSuggestionStep = currentStep === totalSteps;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', zIndex: 99999, padding: '20px', animation: 'fadeIn 0.3s ease'
+    }}>
+      <div style={{
+        background: 'white', borderRadius: '20px', padding: '36px',
+        maxWidth: '540px', width: '100%', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        position: 'relative', animation: 'slideUp 0.4s ease'
+      }}>
+        {/* Progress Bar */}
+        <div style={{
+          width: '100%', height: '4px', background: '#e5e7eb',
+          borderRadius: '10px', marginBottom: '28px', overflow: 'hidden'
+        }}>
+          <div style={{
+            width: `${(currentStep / totalSteps) * 100}%`, height: '100%',
+            background: 'linear-gradient(90deg, #00b368, #00925e)',
+            borderRadius: '10px', transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} />
+        </div>
+
+        {/* Step Counter */}
+        <div style={{
+          fontSize: '13px', fontWeight: '600', color: '#00925e',
+          marginBottom: '20px', letterSpacing: '0.3px'
+        }}>
+          {language === 'ar' ? `السؤال ${currentStep} من ${totalSteps}` : `Question ${currentStep} of ${totalSteps}`}
+        </div>
+
+        {!isSuggestionStep ? (
+          <>
+            {/* Question */}
+            <h2 style={{
+              fontSize: '19px', fontWeight: '600', color: '#1e293b',
+              marginBottom: '28px', lineHeight: '1.5', minHeight: '54px'
+            }}>
+              {language === 'ar' ? currentQuestion.ar : currentQuestion.en}
+            </h2>
+
+            {/* Rating Scale */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+              {currentQuestion.scale.map((option) => {
+                const isSelected = answers[currentQuestion.key] === option.value;
+                const displayValue = typeof option.value === 'number' ? option.value : '';
+                
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => handleAnswer(currentQuestion.key, option.value)}
+                    style={{
+                      padding: '14px 18px',
+                      background: isSelected ? option.color : 'white',
+                      border: `2px solid ${isSelected ? option.color : '#e5e7eb'}`,
+                      borderRadius: '12px', cursor: 'pointer',
+                      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                      transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                      boxShadow: isSelected ? `0 8px 20px ${option.color}30` : '0 2px 8px rgba(0,0,0,0.04)',
+                      display: 'flex', alignItems: 'center', gap: '14px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = option.color;
+                        e.currentTarget.style.transform = 'scale(1.01)';
+                        e.currentTarget.style.boxShadow = `0 4px 12px ${option.color}20`;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
+                      }
+                    }}
+                  >
+                    {displayValue && (
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px',
+                        background: isSelected ? 'rgba(255,255,255,0.25)' : option.color + '15',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', fontWeight: '700',
+                        color: isSelected ? 'white' : option.color, flexShrink: 0
+                      }}>
+                        {displayValue}
+                      </div>
+                    )}
+                    <div style={{
+                      fontSize: '15px', fontWeight: '600',
+                      color: isSelected ? 'white' : '#334155',
+                      textAlign: 'left', flex: 1
+                    }}>
+                      {language === 'ar' ? option.labelAr : option.labelEn}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Suggestions Step */}
+            <h2 style={{
+              fontSize: '19px', fontWeight: '600', color: '#1e293b',
+              marginBottom: '12px', lineHeight: '1.5'
+            }}>
+              {language === 'ar' ? 'ما هي اقتراحاتك لتحسين مستوى الخدمة؟' : 'What are your suggestions to improve our service?'}
+            </h2>
+
+            <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '18px' }}>
+              {language === 'ar' ? '(اختياري)' : '(Optional)'}
+            </p>
+
+            <textarea
+              value={answers.suggestions}
+              onChange={(e) => setAnswers(prev => ({ ...prev, suggestions: e.target.value }))}
+              placeholder={language === 'ar' ? 'شاركنا أفكارك...' : 'Share your thoughts...'}
+              style={{
+                width: '100%', minHeight: '110px', padding: '14px 16px',
+                border: '2px solid #e5e7eb', borderRadius: '12px', fontSize: '14px',
+                fontFamily: 'Inter, sans-serif', resize: 'vertical', outline: 'none',
+                transition: 'all 0.25s ease', marginBottom: '24px', lineHeight: '1.5'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#00b368';
+                e.target.style.boxShadow = '0 0 0 3px rgba(0, 179, 104, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e5e7eb';
+                e.target.style.boxShadow = 'none';
+              }}
+            />
+
+            <button 
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              style={{
+                width: '100%', padding: '14px',
+                background: canSubmit ? 'linear-gradient(135deg, #00b368, #00925e)' : '#e5e7eb',
+                border: 'none', borderRadius: '12px', color: 'white',
+                fontWeight: '600', fontSize: '15px',
+                cursor: canSubmit ? 'pointer' : 'not-allowed',
+                transition: 'all 0.25s ease',
+                boxShadow: canSubmit ? '0 4px 12px rgba(0, 179, 104, 0.25)' : 'none',
+                opacity: canSubmit ? 1 : 0.6
+              }}
+              onMouseEnter={(e) => {
+                if (canSubmit) {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 8px 20px rgba(0, 179, 104, 0.35)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (canSubmit) {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(0, 179, 104, 0.25)';
+                }
+              }}
+            >
+              {language === 'ar' ? 'إرسال التقييم' : 'Submit Feedback'}
+            </button>
+          </>
+        )}
+
+        {/* Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+          {currentStep > 1 ? (
+            <button
+              onClick={() => setCurrentStep(currentStep - 1)}
+              style={{
+                padding: '10px 18px', background: 'white',
+                border: '2px solid #e5e7eb', borderRadius: '10px',
+                color: '#64748b', fontWeight: '600', fontSize: '14px',
+                cursor: 'pointer', transition: 'all 0.25s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = '#cbd5e1';
+                e.target.style.background = '#f9fafb';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = '#e5e7eb';
+                e.target.style.background = 'white';
+              }}
+            >
+              {language === 'ar' ? '→ السابق' : '← Back'}
+            </button>
+          ) : <div />}
+
+          <button onClick={onClose} style={{
+            padding: '10px 18px', background: 'transparent', border: 'none',
+            color: '#94a3b8', fontWeight: '600', fontSize: '14px',
+            cursor: 'pointer', transition: 'color 0.25s ease'
+          }}
+          onMouseEnter={(e) => e.target.style.color = '#64748b'}
+          onMouseLeave={(e) => e.target.style.color = '#94a3b8'}>
+            {language === 'ar' ? 'تخطي الاستبيان' : 'Skip Survey'}
           </button>
         </div>
       </div>
