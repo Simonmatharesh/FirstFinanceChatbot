@@ -67,8 +67,6 @@ export default function App() {
   const push = (role, content) =>
     setMessages(m => [...m, { role, content, time: now(language) }]);
 
-  
-
   /* ----------  LIFE-CYCLE  ---------- */
   useEffect(() => {
     const time = now(language);
@@ -77,8 +75,6 @@ export default function App() {
       { role: "faq", content: "", time },
     ]);
   }, [language, t.greeting]);
-
- 
 
 
 
@@ -97,14 +93,6 @@ useEffect(() => {
     window.scrollBy(0, -20); 
   }
 }, [messages]);
-
-  /* ----------  KB EXECUTE  ---------- */
-
-
-
-
-
-
 
 
 
@@ -177,16 +165,8 @@ All services provided by First Finance Company are Shari'a-compliant financial s
     return push('bot', "Please specify whether you want **Retail** or **Corporate** finance.");
   }
 
-  // ========== PRIORITY 1: EXTRACT CONTEXT FIRST ==========
 
 
-
-// ========== PRIORITY 1.6: ELIGIBILITY QUESTIONS (GEMINI-POWERED) ==========
-  
-
-
-  // ========== PRIORITY 4: SEMANTIC SEARCH WITH CONTEXT ==========
-// ========== PRIORITY 5: GEMINI ==========
 setIsLoading(true);  // ← START LOADING
 
 try {
@@ -202,17 +182,9 @@ try {
   setIsLoading(false);  // ← STOP LOADING (on error)
 }
 
-// ========== FALLBACK ==========
 setIsLoading(false);  // ← STOP LOADING (fallback)
 return push('bot', t.fallback);
 };
-
-// ========== FIXED FOLLOW-UP HANDLER ==========
-
-
-// ==================== INTENT CLASSIFIER ====================
-
-
 
 
 
@@ -358,9 +330,9 @@ function handleEMIFlow(userText, time) {
       
       const reply = `**Preliminary Finance Details for ${newEmiData.product}**
 
-Finance Amount: ${newEmiData.amount.toLocaleString()} QAR
-Nationality: ${newEmiData.nationality}
-Duration: ${months} months
+  Finance Amount: ${newEmiData.amount.toLocaleString()} QAR
+  Nationality: ${newEmiData.nationality}
+  Duration: ${months} months
 
 - Total Payable Amount: ${total.toLocaleString()} QAR
 - Down Payment: 0 QAR
@@ -380,7 +352,7 @@ Duration: ${months} months
   }
 }
 
-  /* ----------  RENDER  ---------- */
+
 /* ----------  RENDER  ---------- */
 return (
  <div
@@ -408,7 +380,7 @@ return (
           zIndex: 1000
         }}
       >
-        💬
+      
       </button>
     ) : (
       <div className="chat-box">
