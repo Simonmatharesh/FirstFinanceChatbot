@@ -490,6 +490,7 @@ A financing solution for foreign-owned or expat companies to purchase goods **lo
     "qatari fleet finance",
     "qatari equipment finance",
     "fleet financing qatari company",
+    "vehicle and equipment financing qatari",
     "vehicle loan for qatari companies",
     "تمويل المركبات للشركات القطرية",
     "تمويل الأساطيل للشركات القطرية"
@@ -687,7 +688,13 @@ All services are **100% Shariah-compliant**.`
     category: "corporate_goods_finance",
     triggers: [
       "goods finance", "import finance", "export finance",
-      "company goods finance", "تمويل بضائع"
+      "company goods finance", "تمويل بضائع",
+      "goods finance repayment period",
+      "repayment period goods finance",
+      "what is the repayment period for goods finance",
+      "how long is goods finance",
+      "goods finance tenure",
+      "goods finance duration"
     ],
     response: `
 **Goods Finance (Corporate)**
@@ -764,6 +771,7 @@ Varies based on credit limit type and financing requirements. Please contact you
 
 All services are **100% Shariah-compliant**.`
   },
+  
   /* ═══════════════════════════════════════════════════════════════
  * QUALITY POLICY
  * ═══════════════════════════════════════════════════════════════ */

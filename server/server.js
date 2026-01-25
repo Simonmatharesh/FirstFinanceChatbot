@@ -43,7 +43,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
 app.use(cors({
   origin: (origin, callback) => {
     // In production, be strict
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+    
     
     // Only allow no-origin in development
     if (!origin && process.env.NODE_ENV === 'development') {
@@ -126,6 +126,9 @@ You MUST follow these rules:
 - If KB answer is weak/partial, use reasoning + KB context for helpful response
 - Stay within FFC services scope - never guess outside domain
 - ALWAYS end responses with: "All these services are Shari'a-compliant financial services."
+- If user asks about repayment periods generally, extract data from ALL relevant KB entries
+- Never guess or approximate - if KB says "36 months", say exactly that
+- Stay within FFC services scope - never guess outside domain
 
 ━━━━━━━━━━
 🔹 **2. Scope (Answer ONLY these topics)**
@@ -278,7 +281,7 @@ try {
   const userEmbedding = await embedText(message);
 
   // 6️⃣ Find best match in KB with context awareness
-  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext);
+  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.88);
   if (bestMatch) {
     console.log("KB match:", bestMatch.triggers[0]);
     
@@ -299,26 +302,41 @@ try {
     return res.json({ interpretation: response });
   }
 
-  // 7️⃣ Build context-aware prompt for Gemini
-  let contextPrompt = SYSTEM_PROMPT + message;
-  
+  const top3Matches = findTop3Matches(userEmbedding, updatedContext);
+  const kbContext = top3Matches.length > 0 
+    ? `\n**RELEVANT KB ENTRIES:**\n${top3Matches.map(m => 
+        `- ${typeof m.response === 'function' ? '[Dynamic Response]' : m.response.substring(0, 300)}...`
+      ).join('\n')}\n`
+    : '';
+
   // Detect current message language
   const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const currentLanguage = hasArabic ? "Arabic" : "English";
 
+  // 7️⃣ Build context-aware prompt for Gemini
+  let contextPrompt;
+
   if (updatedContext && (updatedContext.nationality || updatedContext.product || updatedContext.recentMessages?.length)) {
     contextPrompt = `${SYSTEM_PROMPT}
+  ${kbContext}
+  **CONVERSATION CONTEXT (for reference only):**
+  ${updatedContext.topic ? `- Current topic: ${updatedContext.topic}` : ''}
+  ${updatedContext.product ? `- Last product discussed: ${updatedContext.product}` : ''}
+  ${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality}` : ''}
+  ${updatedContext.recentMessages?.length ? `- Recent conversation:\n${updatedContext.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
 
-**CONVERSATION CONTEXT (for reference only):**
-${updatedContext.topic ? `- Current topic: ${updatedContext.topic}` : ''}
-${updatedContext.product ? `- Last product discussed: ${updatedContext.product}` : ''}
-${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality}` : ''}
-${updatedContext.recentMessages?.length ? `- Recent conversation:\n${updatedContext.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+  **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+  **YOU MUST RESPOND IN: ${currentLanguage}**
 
-**CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
-**YOU MUST RESPOND IN: ${currentLanguage}**
+  User message: ${message}`;
+  } else {
+    // No conversation context, but still include KB context
+    contextPrompt = `${SYSTEM_PROMPT}
+  ${kbContext}
+  **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+  **YOU MUST RESPOND IN: ${currentLanguage}**
 
-User message: ${message}`;
+  User message: ${message}`;
   }
 
   const model = genAI.getGenerativeModel({
@@ -451,7 +469,7 @@ function extractIntent(message) {
 }
 
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.95) {
+function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.88) {
   let best = null;
   let highestScore = -1;
 
@@ -579,6 +597,42 @@ function findBestMatch(userEmbedding, threshold = 0.9) {
   }
 
   return highestScore >= threshold ? best : null;
+}
+// Add after findBestMatchWithContext function
+function findTop3Matches(userEmbedding, userContextSummary, threshold = 0.70) {
+  const matches = [];
+
+  for (const item of kbWithEmbeddings) {
+    if (!item.embedding || !Array.isArray(item.embedding)) continue;
+
+    let score = cosineSimilarity(userEmbedding, item.embedding);
+
+    // Apply same context boosting
+    if (userContextSummary?.topic && item.category?.includes(userContextSummary.topic)) {
+      score += 0.15;
+    }
+    if (userContextSummary?.product && item.category?.includes(userContextSummary.product)) {
+      score += 0.1;
+    }
+    if (userContextSummary?.nationality) {
+      const itemLower = item.category?.toLowerCase() || '';
+      const contextNat = userContextSummary.nationality.toLowerCase();
+      if (itemLower.includes(contextNat)) {
+        score += 0.2;
+      } else if (itemLower.includes('qatari') || itemLower.includes('expat')) {
+        score -= 0.25;
+      }
+    }
+
+    if (score >= threshold) {
+      matches.push({ ...item, score });
+    }
+  }
+
+  // Return top 3, sorted by score
+  return matches
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 }
 
 const PORT = 3001;
