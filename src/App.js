@@ -86,13 +86,13 @@ useEffect(() => {
   const botMessages = messagesContainer.querySelectorAll('.message.bot');
   const lastBotMessage = botMessages[botMessages.length - 1];
 
-  if (lastBotMessage) {
+  if (lastBotMessage && typeof lastBotMessage.scrollIntoView === 'function') {
     lastBotMessage.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
-    
     
     window.scrollBy(0, -20); 
   }
 }, [messages]);
+
 
 
 
