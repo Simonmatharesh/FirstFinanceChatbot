@@ -4,7 +4,7 @@ import "./App.css";
 
 
 /* ----------  CONFIG  ---------- */
-const fuseOptions = { keys: ["triggers", "response"], threshold: 0.65, includeScore: true };
+
 
 
 const text = {
@@ -311,15 +311,7 @@ function handleEMIFlow(userText, time) {
       newEmiData.tenureMonths = months;
       const { emi, total } = calculateEMI(newEmiData.amount, months);
 
-      const emiRecord = {
-        product: newEmiData.product,
-        nationality: newEmiData.nationality,
-        category: newEmiData.category,
-        amount: newEmiData.amount,
-        months,
-        emi,
-        total
-      };
+
       
 
       const today = new Date();

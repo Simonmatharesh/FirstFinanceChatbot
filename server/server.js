@@ -42,8 +42,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // In production, be strict
-    
+  
     
     // Only allow no-origin in development
     if (!origin && process.env.NODE_ENV === 'development') {
@@ -53,7 +52,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log(`🚫 Blocked request from: ${origin || 'unknown'}`);
+      console.log(`Blocked request from: ${origin || 'unknown'}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -68,18 +67,13 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-
-
-
-
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 //  GLOBAL RATE LIMIT: 4 requests per minute TOTAL (all users combined)
 const globalChatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute window
   max: 4, // ONLY 4 TOTAL requests per minute across ALL users
-  keyGenerator: () => 'global', // Same key for everyone = shared limit
+  keyGenerator: () => 'global', 
   skipSuccessfulRequests: false,
   handler: (req, res) => {
     console.log(`🚨 GLOBAL rate limit hit! Too many users sending messages.`);
@@ -221,12 +215,12 @@ app.post("/api/chat", globalChatLimiter ,async (req, res) => {
     return res.json({ interpretation: "Please type a message." });
   }
 
-  // ✅ NEW: Validate userId format
+  //  NEW: Validate userId format
   if (!userId || typeof userId !== 'string' || userId.length > 150) {
     return res.status(400).json({ interpretation: "Invalid request." });
   }
 
-  // ✅ NEW: Check daily API quota
+  //  NEW: Check daily API quota
   if (!checkDailyQuota()) {
     console.log('🚨 Daily API quota exceeded!');
     return res.status(503).json({ 
@@ -234,7 +228,7 @@ app.post("/api/chat", globalChatLimiter ,async (req, res) => {
     });
   }
 
-  // ✅ NEW: Validate message length
+  //  NEW: Validate message length
   if (message.length > 1000) {
     return res.status(400).json({ 
       interpretation: "Your message is too long. Please keep it under 1000 characters." 
@@ -246,13 +240,13 @@ app.post("/api/chat", globalChatLimiter ,async (req, res) => {
   console.log("UserID:", userId);
 
 try {
-  // 1️⃣ Extract intent BEFORE embedding
+  //  Extract intent BEFORE embedding
   const intent = extractIntent(message);
   
-  // 2️⃣ Get current context
+  //  Get current context
   const existingContext = userId ? sessionMemory.getContextSummary(userId) : null;
   
-  // 3️⃣ Update context with new intent data
+  //  Update context with new intent data
     if (userId) {
       // Only update nationality if new intent has it, OR keep existing
       if (intent.nationality) {
@@ -273,14 +267,14 @@ try {
       }
     }
   
-  // 4️⃣ Get UPDATED context (includes new intent data)
+  // Get UPDATED context (includes new intent data)
     const updatedContext = userId ? sessionMemory.getContextSummary(userId) : null;
     console.log("📊 Final context:", updatedContext);
 
-  // 5️⃣ Generate embedding for the user message
+  // Generate embedding for the user message
   const userEmbedding = await embedText(message);
 
-  // 6️⃣ Find best match in KB with context awareness
+  // Find best match in KB with context awareness
   const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.88);
   if (bestMatch) {
     console.log("KB match:", bestMatch.triggers[0]);
@@ -313,7 +307,7 @@ try {
   const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const currentLanguage = hasArabic ? "Arabic" : "English";
 
-  // 7️⃣ Build context-aware prompt for Gemini
+  //  Build context-aware prompt for Gemini
   let contextPrompt;
 
   if (updatedContext && (updatedContext.nationality || updatedContext.product || updatedContext.recentMessages?.length)) {
@@ -464,7 +458,7 @@ function extractIntent(message) {
     }
   }
 
-  console.log(`🔍 Extracted intent:`, intent);
+  console.log(` Extracted intent:`, intent);
   return intent;
 }
 
