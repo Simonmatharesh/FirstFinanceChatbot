@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ffc-chatbot-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://ffc-hkevhugvaed6fedx.westeurope-01.azurewebsites.net

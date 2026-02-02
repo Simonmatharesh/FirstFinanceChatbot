@@ -3,7 +3,7 @@ import express from "express";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import cors from "cors";
 import dotenv from "dotenv";
-import { knowledgeBase } from "../src/knowledgeBase.js";
+import { knowledgeBase } from "./knowledgeBase.js";
 import { pipeline } from "@xenova/transformers";
 import cosineSimilarity from "compute-cosine-similarity";
 import { sessionMemory } from './sessionMemory.js';
@@ -37,7 +37,8 @@ app.use(helmet({
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:3000',
-  'http://localhost:3001'
+  'http://localhost:3001',
+  'https://ffc-hkevhugvaed6fedx.westeurope-01.azurewebsites.net'
 ];
 
 app.use(cors({
@@ -629,8 +630,7 @@ function findTop3Matches(userEmbedding, userContextSummary, threshold = 0.70) {
     .slice(0, 3);
 }
 
-const PORT = 3001;
-
+const PORT = process.env.PORT || 3001;
 // start server after embeddings are ready
 (async () => {
   await initEmbedder();

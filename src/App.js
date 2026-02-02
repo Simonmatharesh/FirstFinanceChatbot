@@ -223,7 +223,8 @@ async function askGemini(userText) {
   
     
     // Send context to server
-    const res = await fetch('http://localhost:3001/api/chat', {
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
