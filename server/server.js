@@ -38,7 +38,8 @@ app.use(helmet({
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://ffc-hkevhugvaed6fedx.westeurope-01.azurewebsites.net'
+  'https://ffc-hkevhugvaed6fedx.westeurope-01.azurewebsites.net',
+  'https://firstfinancechatbot-3.onrender.com'
 ];
 
 app.use(cors({
