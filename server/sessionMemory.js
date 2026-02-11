@@ -84,12 +84,13 @@ class SessionMemory {
     }
   }
 
-  getContextSummary(userId) {
+    getContextSummary(userId) {
     const session = this.getSession(userId);
     return {
       topic: session.conversationState.currentTopic,
       product: session.conversationState.lastProductMentioned,
       nationality: session.data.nationality,
+      specificCorporateProduct: session.data.specificCorporateProduct,  // NEW
       recentMessages: session.conversationState.conversationHistory.slice(-2),
     };
   }

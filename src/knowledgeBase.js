@@ -394,7 +394,7 @@ A **Shariah-compliant** financing solution based on commodity and metal transact
 4. Original ID cards of partners  
 5. Original passports of resident partners  
 6. Operating contracts, invoices, and supply orders  
-7. Any additional documents required by FFC
+7.	Must provide real estate or cash collateral covering 80% of the total indebtedness, or a Qatari guarantor (a Qatari individual or a Qatari company) who is creditworthy and meets specified conditions.
 `
 }
 ,
@@ -1066,10 +1066,11 @@ All applications are **100% Shariah-compliant**.`
   {
     category: "after_sales_services",
     triggers: [
-      "after sales", "after-sales", "services", "collections",
-      "liability certificate", "vehicle lien release", "lien release",
-      "bank payment order", "replace cheque", "vehicle export",
-      "property mortgage", "clearance", "certificate"
+    "after sales", "after-sales", "after sales services", "after sales certificate",
+    "collections", "liability certificate", "vehicle lien release", "lien release",
+    "bank payment order", "replace cheque", "vehicle export",
+    "property mortgage", "clearance certificate", "after sales help",
+    "post financing services", "certificate issuance"
     ],
     response: `
 **After-Sales Services**
@@ -1143,10 +1144,29 @@ Required:
 
 All services are **100% Shariah-compliant**.`
   },
+{
+  category: "social_media",
+  triggers: [
+    "social media", "instagram", "facebook", "twitter", "linkedin",
+    "youtube", "tiktok", "social channels", "official channels",
+    "follow us", "social accounts", "وسائل التواصل الاجتماعي"
+  ],
+  response: `
+**First Finance Social Media Channels**
 
+Stay connected with us on social media:
+
+📱 **Instagram:** [@firstfinanceqatar](https://www.instagram.com/ffc_qatar/?hl=en)
+📘 **Facebook:** [First Finance Qatar](https://www.facebook.com/FirstFinanceCompany/)
+
+For assistance, contact us at **+974 4455 9999**
+
+All services are **100% Shariah-compliant**.`
+},
   /* ═══════════════════════════════════════════════════════════════
    * EMI & CALCULATIONS
    * ═══════════════════════════════════════════════════════════════ */
+
 
   {
     category: "vehicle_emi",
@@ -1192,7 +1212,9 @@ Would you like to start an EMI calculation?`;
   },
   {
     category : "App",
-    triggers : ["app","download","mobile"],
+    triggers : [ "app", "download", "mobile", "mobile app", "app download",
+    "tell me about the app", "ffc app", "first finance app",
+    "how to download app", "where to get app", "application mobile"],
     response :`
 **First Finance Company Mobile App - Features & Digital Services**:
 Our mobile app is designed to meet all your day-to-day financing needs quickly and efficiently. With this versatile app, you can:

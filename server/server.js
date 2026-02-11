@@ -132,8 +132,8 @@ You MUST follow these rules:
 ✅ Eligibility, Documents, Application Process
 ✅ Company: CEO, board, history, mission, vision, quality policy, ISO cert
 ✅ Shariah Compliance, All contracts (Murabaha, Ijara, Musawamah, Bay al-Manfaah, Istisna)
-✅ Contact, Branches, Working Hours, Digital Services
-✅ Accreditation: Company accreditation levels and requirements
+✅ Contact, Branches, Working Hours, Digital Services,social media channels of ffc
+✅ Accreditation: Company accreditation levels and requirements,after sales services
 
 ❌ REJECT: Other companies, weather, sports, general knowledge, unrelated topics
 → Reply: "I'm here to help with First Finance Qatar services and finance-related questions only."
@@ -244,14 +244,13 @@ app.post("/api/chat", globalChatLimiter ,async (req, res) => {
 
 try {
   //  Extract intent BEFORE embedding
-  const intent = extractIntent(message);
-  
-  //  Get current context
-  const existingContext = userId ? sessionMemory.getContextSummary(userId) : null;
-  
-  //  Update context with new intent data
+// Extract intent BEFORE embedding
+    const existingContext = userId ? sessionMemory.getContextSummary(userId) : null;
+    const intent = extractIntent(message, existingContext);  // Pass previous context
+
+    // Update context with new intent data
     if (userId) {
-      // Only update nationality if new intent has it, OR keep existing
+      // Nationality update
       if (intent.nationality) {
         sessionMemory.set(userId, 'nationality', intent.nationality);
         console.log(`📌 Set nationality: ${intent.nationality}`);
@@ -259,11 +258,21 @@ try {
         console.log(`♻️ Keeping existing nationality: ${existingContext.nationality}`);
       }
       
+      // Product update
       if (intent.product) {
         sessionMemory.setLastProduct(userId, intent.product);
         console.log(`📌 Set product: ${intent.product}`);
       }
       
+      // NEW: Track specific corporate product
+      if (intent.specificCorporateProduct) {
+        sessionMemory.set(userId, 'specificCorporateProduct', intent.specificCorporateProduct);
+        console.log(`📌 Set specific corporate product: ${intent.specificCorporateProduct}`);
+      } else if (existingContext?.specificCorporateProduct) {
+        console.log(`♻️ Keeping existing corporate product: ${existingContext.specificCorporateProduct}`);
+      }
+      
+      // Topic update
       if (intent.topic) {
         sessionMemory.setCurrentTopic(userId, intent.topic);
         console.log(`📌 Set topic: ${intent.topic}`);
@@ -278,7 +287,7 @@ try {
   const userEmbedding = await embedText(message);
 
   // Find best match in KB with context awareness
-  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.88);
+  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.47);
   if (bestMatch) {
     console.log("KB match:", bestMatch.triggers[0]);
     
@@ -319,7 +328,8 @@ try {
   **CONVERSATION CONTEXT (for reference only):**
   ${updatedContext.topic ? `- Current topic: ${updatedContext.topic}` : ''}
   ${updatedContext.product ? `- Last product discussed: ${updatedContext.product}` : ''}
-  ${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality}` : ''}
+  ${updatedContext.specificCorporateProduct ? `- Specific corporate product: ${updatedContext.specificCorporateProduct}` : ''}  <!-- NEW -->
+  ${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality} (CRITICAL: Use ${updatedContext.nationality} version of products!)` : ''}
   ${updatedContext.recentMessages?.length ? `- Recent conversation:\n${updatedContext.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
 
   **CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
@@ -337,7 +347,7 @@ try {
   }
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-2.5-flash",
     generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
   });
   
@@ -397,76 +407,172 @@ app.get("/api/stats", (req, res) => {
 });
 
 // ===== ADD THIS FUNCTION AT THE TOP OF server.js =====
-function extractIntent(message) {
-  const lower = message.toLowerCase();
+function extractIntent(message, previousContext = null) {
+  const lower = message.toLowerCase().trim();
   const intent = {
     nationality: null,
     product: null,
-    topic: null
+    topic: null,
+    specificCorporateProduct: null,
+    isFollowUp: false
   };
 
   // ============================================
-  // NATIONALITY DETECTION - IMPROVED
+  // FOLLOW-UP DETECTION
   // ============================================
   
-  // Method 1: "I am/I'm [something] expat/qatari"
-  if (/\b(i am|i'm|im)\b.*\b(expat|expatriate|resident|foreigner)\b/i.test(lower)) {
+  if (/^(qatari|qatar national|expat|expatriate|resident)s?$/i.test(lower)) {
+    intent.isFollowUp = true;
+    
+    if (/^(qatari|qatar national)s?$/i.test(lower)) {
+      intent.nationality = "Qatari";
+    } else {
+      intent.nationality = "Expat";
+    }
+    
+    if (previousContext?.product) {
+      intent.product = previousContext.product;
+      console.log(`🔄 Follow-up: Preserving product "${previousContext.product}"`);
+    }
+    if (previousContext?.topic) {
+      intent.topic = previousContext.topic;
+      console.log(`🔄 Follow-up: Preserving topic "${previousContext.topic}"`);
+    }
+    if (previousContext?.specificCorporateProduct) {
+      intent.specificCorporateProduct = previousContext.specificCorporateProduct;
+      console.log(`🔄 Follow-up: Preserving corporate product "${previousContext.specificCorporateProduct}"`);
+    }
+    
+    console.log(`🔍 Extracted intent (follow-up):`, intent);
+    return intent;
+  }
+
+  // ============================================
+  // NATIONALITY DETECTION - COMPREHENSIVE
+  // ============================================
+  
+  // Priority 1: Explicit "for expats/qataris" anywhere in message
+  if (/\bfor\s+(expats?|expatriates?)\b/i.test(lower)) {
     intent.nationality = "Expat";
-  } else if (/\b(i am|i'm|im)\b.*\b(qatari|qatar national)\b/i.test(lower)) {
+  } else if (/\bfor\s+(qataris?|qatar\s+nationals?)\b/i.test(lower)) {
     intent.nationality = "Qatari";
   }
   
-  // Method 2: Direct mention without "I am"
-  else if (/\b(expat|expatriate|resident|foreigner)\b/i.test(lower) && 
-           !/\bfor\s+(expat|qatari)\b/i.test(lower)) {
-    // Only if not asking "for expat" (which is a question, not identity)
+  // Priority 2: "what about expat/qatari"
+  else if (/\b(what about|how about)\s+(expats?|expatriates?)\b/i.test(lower)) {
     intent.nationality = "Expat";
-  } else if (/\b(qatari|qatar national)\b/i.test(lower) && 
-             !/\bfor\s+(expat|qatari)\b/i.test(lower)) {
+  } else if (/\b(what about|how about)\s+(qataris?|qatar\s+nationals?)\b/i.test(lower)) {
+    intent.nationality = "Qatari";
+  }
+  
+  // Priority 3: "I am/I'm"
+  else if (/\b(i am|i'?m|im)\b.*\b(expats?|expatriates?|residents?|foreigners?)\b/i.test(lower)) {
+    intent.nationality = "Expat";
+  } else if (/\b(i am|i'?m|im)\b.*\b(qataris?|qatar\s+nationals?)\b/i.test(lower)) {
+    intent.nationality = "Qatari";
+  }
+  
+  // Priority 4: Direct mention (only if NOT asking "what about" or "for")
+  else if (/\b(expats?|expatriates?|residents?|foreigners?)\b/i.test(lower) && 
+           !/\b(for|about|what about|how about)\s+(expats?|qataris?)\b/i.test(lower)) {
+    intent.nationality = "Expat";
+  } else if (/\b(qataris?|qatar\s+nationals?)\b/i.test(lower) && 
+             !/\b(for|about|what about|how about)\s+(expats?|qataris?)\b/i.test(lower)) {
     intent.nationality = "Qatari";
   }
 
   // ============================================
-  // PRODUCT DETECTION - UNCHANGED
+  // SPECIFIC CORPORATE PRODUCT DETECTION
   // ============================================
   
-  if (/\b(vehicle|car|auto|motorcycle|marine|boat)\s*(finance|loan|financing)?/i.test(lower)) {
-    intent.product = "vehicle";
-    intent.topic = "vehicle_finance";
-  } else if (/\bpersonal\s*(finance|loan|financing)/i.test(lower)) {
-    intent.product = "personal";
-    intent.topic = "personal_finance";
-  } else if (/\b(housing|home|property|real estate)\s*(finance|loan|financing)?/i.test(lower)) {
-    intent.product = "housing";
-    intent.topic = "housing_finance";
-  } else if (/\b(service|services|travel|education|wedding|healthcare)\s*(finance|loan|financing)?/i.test(lower)) {
-    intent.product = "services";
-    intent.topic = "services_finance";
-  } else if (/\b(corporate|company|business)\s*(finance|loan|financing)?/i.test(lower)) {
+  if (/\b(commodit|commodity|commodities)\b/i.test(lower)) {
+    intent.specificCorporateProduct = "commodities";
+    intent.product = "corporate";
+    intent.topic = "corporate_finance";
+  } else if (/\b(goods|trade)\b.*\b(financ|loan)\b/i.test(lower) || /\bgoods\s+financ/i.test(lower)) {
+    intent.specificCorporateProduct = "goods";
+    intent.product = "corporate";
+    intent.topic = "corporate_finance";
+  } else if (/\b(fleet|vehicle.*equipment|equipment.*vehicle)\b/i.test(lower)) {
+    intent.specificCorporateProduct = "vehicle_equipment";
+    intent.product = "corporate";
+    intent.topic = "corporate_finance";
+  } else if (/\brevolving\s*credit\b/i.test(lower)) {
+    intent.specificCorporateProduct = "revolving_credit";
     intent.product = "corporate";
     intent.topic = "corporate_finance";
   }
+  
+// ============================================
+// GENERAL PRODUCT DETECTION
+// ============================================
 
-  // Document requests
-  if (/documents?\s+(for|needed|required)/i.test(lower)) {
-    if (!intent.product && /vehicle|car/i.test(lower)) {
-      intent.product = "vehicle";
-      intent.topic = "vehicle_finance";
-    } else if (!intent.product && /personal/i.test(lower)) {
-      intent.product = "personal";
-      intent.topic = "personal_finance";
-    } else if (!intent.product && /housing|home/i.test(lower)) {
-      intent.product = "housing";
-      intent.topic = "housing_finance";
-    }
-  }
-
-  console.log(` Extracted intent:`, intent);
+// PRIORITY 0: Avoid false positives - Check these FIRST
+if (/\bafter\s*-?\s*sales?\s*(service|certificate|help|department)/i.test(lower)) {
+  // Don't set product - this is NOT services finance
+  console.log(`🚫 Skipped product detection: "after sales" query`);
+  console.log(`🔍 Extracted intent:`, intent);
   return intent;
 }
 
+if (/\b(mobile\s*app|download\s*app|app\s*download|ffc\s*app)\b/i.test(lower)) {
+  // Don't set product - this is app query
+  console.log(`🚫 Skipped product detection: "app" query`);
+  console.log(`🔍 Extracted intent:`, intent);
+  return intent;
+}
+
+if (/\b(social\s*media|instagram|facebook|twitter|linkedin|youtube|tiktok)\b/i.test(lower)) {
+  // Don't set product - this is social media query
+  console.log(`🚫 Skipped product detection: "social media" query`);
+  console.log(`🔍 Extracted intent:`, intent);
+  return intent;
+}
+
+// PRIORITY 1: Specific corporate products (check before general products)
+if (/\b(commodit|commodity|commodities)\b/i.test(lower)) {
+  intent.specificCorporateProduct = "commodities";
+  intent.product = "corporate";
+  intent.topic = "corporate_finance";
+} else if (/\bgoods\s+(financ|loan|trade)\b/i.test(lower)) {
+  intent.specificCorporateProduct = "goods";
+  intent.product = "corporate";
+  intent.topic = "corporate_finance";
+} else if (/\b(fleet|vehicle.*equipment|equipment.*vehicle)\b/i.test(lower)) {
+  intent.specificCorporateProduct = "vehicle_equipment";
+  intent.product = "corporate";
+  intent.topic = "corporate_finance";
+} else if (/\brevolving\s*credit\b/i.test(lower)) {
+  intent.specificCorporateProduct = "revolving_credit";
+  intent.product = "corporate";
+  intent.topic = "corporate_finance";
+}
+
+// PRIORITY 2: Retail finance products (only if NOT already matched above)
+else if (/\b(vehicle|car|auto|motorcycle|marine|boat)\s*(finance|loan|financing)?/i.test(lower)) {
+  intent.product = "vehicle";
+  intent.topic = "vehicle_finance";
+} else if (/\bpersonal\s*(finance|loan|financing)/i.test(lower)) {
+  intent.product = "personal";
+  intent.topic = "personal_finance";
+} else if (/\b(housing|home|property|real estate)\s*(finance|loan|financing)?/i.test(lower)) {
+  intent.product = "housing";
+  intent.topic = "housing_finance";
+} 
+// IMPORTANT: Only match "services finance" if it's CLEARLY about financing services
+else if (/\b(service|services)\s*(finance|loan|financing)\b/i.test(lower)) {
+  intent.product = "services";
+  intent.topic = "services_finance";
+} else if (/\b(corporate|company|business)\s*(finance|loan|financing)?/i.test(lower)) {
+  intent.product = "corporate";
+  intent.topic = "corporate_finance";
+}
+
+console.log(`🔍 Extracted intent:`, intent);
+return intent;
+}
 // Helper: Find best match with context boosting
-function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.88) {
+function findBestMatchWithContext(userEmbedding, userContextSummary, threshold = 0.75) {
   let best = null;
   let highestScore = -1;
 
@@ -474,25 +580,78 @@ function findBestMatchWithContext(userEmbedding, userContextSummary, threshold =
     if (!item.embedding || !Array.isArray(item.embedding)) continue;
 
     let score = cosineSimilarity(userEmbedding, item.embedding);
+    const itemCategory = item.category?.toLowerCase() || '';
+    const itemTriggersText = item.triggers?.join(' ').toLowerCase() || '';
+    
+    // Combine both for comprehensive checking
+    const itemFullText = `${itemCategory} ${itemTriggersText}`;
 
-    // Boost score if item matches current context
-    if (userContextSummary?.topic && item.category?.includes(userContextSummary.topic)) {
+    // ============================================
+    // CONTEXT BOOSTING
+    // ============================================
+    
+    // Topic boost
+    if (userContextSummary?.topic && itemCategory.includes(userContextSummary.topic)) {
       score += 0.15;
     }
 
-    if (userContextSummary?.product && item.category?.includes(userContextSummary.product)) {
-      score += 0.1; // Reduced from 0.12
+    // Product boost
+   // Product boost - STRENGTHENED to prioritize product matching
+    if (userContextSummary?.product && itemCategory.includes(userContextSummary.product)) {
+      score += 0.25;  // Increased from 0.08 to 0.25
+      console.log(`✅ Boosted ${item.triggers[0]} for matching product: ${userContextSummary.product}`);
     }
 
-    // CRITICAL FIX: Boost nationality match, PENALIZE wrong nationality
+    // Specific corporate product boost
+    if (userContextSummary?.specificCorporateProduct) {
+      const corpProduct = userContextSummary.specificCorporateProduct;
+      
+      if (itemFullText.includes(corpProduct)) {
+        score += 0.25;
+        console.log(`✅ Boosted ${item.triggers[0]} for matching corporate product: ${corpProduct}`);
+      }
+    }
+
+    // ============================================
+    // NATIONALITY MATCHING - FIXED VERSION
+    // ============================================
+    
     if (userContextSummary?.nationality) {
-      const itemLower = item.category?.toLowerCase() || '';
       const contextNat = userContextSummary.nationality.toLowerCase();
       
-      if (itemLower.includes(contextNat)) {
-        score += 0.2; // Strong boost for correct nationality
-      } else if (itemLower.includes('qatari') || itemLower.includes('expat')) {
-        score -= 0.25; // Strong penalty for wrong nationality
+      // More comprehensive nationality detection
+      const isQatariItem = 
+        itemCategory.includes('qatari') || 
+        itemTriggersText.includes('qatari') ||
+        itemCategory.includes('qatar_national');
+        
+      const isExpatItem = 
+        itemCategory.includes('expat') || 
+        itemTriggersText.includes('expat') ||
+        itemCategory.includes('non_qatari') ||
+        itemCategory.includes('non-qatari') ||
+        itemCategory.includes('foreign') ||
+        itemCategory.includes('resident');
+      
+      // Apply boost/penalty ONLY if item is nationality-specific
+      if (isQatariItem || isExpatItem) {
+        if (contextNat === 'qatari') {
+          if (isQatariItem && !isExpatItem) {
+            score += 0.35;  // Increased boost
+            console.log(`✅ Boosted ${item.triggers[0]} for Qatari match`);
+          } else if (isExpatItem && !isQatariItem) {
+            score -= 0.50;  // Stronger penalty
+            console.log(`❌ Penalized ${item.triggers[0]} for Expat mismatch (user is Qatari)`);
+          }
+        } else if (contextNat === 'expat') {
+          if (isExpatItem && !isQatariItem) {
+            score += 0.35;  // Increased boost
+            console.log(`✅ Boosted ${item.triggers[0]} for Expat match`);
+          } else if (isQatariItem && !isExpatItem) {
+            score -= 0.50;  // Stronger penalty
+            console.log(`❌ Penalized ${item.triggers[0]} for Qatari mismatch (user is Expat)`);
+          }
+        }
       }
     }
 
@@ -502,6 +661,7 @@ function findBestMatchWithContext(userEmbedding, userContextSummary, threshold =
     }
   }
 
+  console.log(`🎯 Best match score: ${highestScore.toFixed(3)} - ${best?.triggers[0] || 'none'}`);
   return highestScore >= threshold ? best : null;
 }
 
