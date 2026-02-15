@@ -287,7 +287,7 @@ try {
   const userEmbedding = await embedText(message);
 
   // Find best match in KB with context awareness
-  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.47);
+  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.85);
   if (bestMatch) {
     console.log("KB match:", bestMatch.triggers[0]);
     
@@ -405,6 +405,7 @@ app.get("/api/stats", (req, res) => {
     sessions: sessions.slice(0, 10) // Only show first 10
   });
 });
+
 
 // ===== ADD THIS FUNCTION AT THE TOP OF server.js =====
 function extractIntent(message, previousContext = null) {
@@ -598,7 +599,7 @@ function findBestMatchWithContext(userEmbedding, userContextSummary, threshold =
     // Product boost
    // Product boost - STRENGTHENED to prioritize product matching
     if (userContextSummary?.product && itemCategory.includes(userContextSummary.product)) {
-      score += 0.25;  // Increased from 0.08 to 0.25
+      score += 0.20;  // Increased from 0.08 to 0.25
       console.log(`✅ Boosted ${item.triggers[0]} for matching product: ${userContextSummary.product}`);
     }
 
@@ -637,7 +638,7 @@ function findBestMatchWithContext(userEmbedding, userContextSummary, threshold =
       if (isQatariItem || isExpatItem) {
         if (contextNat === 'qatari') {
           if (isQatariItem && !isExpatItem) {
-            score += 0.35;  // Increased boost
+            score += 0.25;  // Increased boost
             console.log(`✅ Boosted ${item.triggers[0]} for Qatari match`);
           } else if (isExpatItem && !isQatariItem) {
             score -= 0.50;  // Stronger penalty
@@ -653,7 +654,18 @@ function findBestMatchWithContext(userEmbedding, userContextSummary, threshold =
           }
         }
       }
+          if (userContextSummary?.product && userContextSummary?.nationality) {
+      const hasProduct = itemCategory.includes(userContextSummary.product);
+      const hasNationality = 
+        (contextNat === 'expat' && isExpatItem) || 
+        (contextNat === 'qatari' && isQatariItem);
+      
+      if (hasProduct && hasNationality) {
+        score += 0.15;  // Super boost for perfect match!
+        console.log(`🎯 SUPER BOOST for exact match: ${item.triggers[0]}`);
+      }
     }
+  }
 
     if (score > highestScore) {
       highestScore = score;
