@@ -284,10 +284,108 @@ try {
     console.log("📊 Final context:", updatedContext);
 
   // Generate embedding for the user message
-  const userEmbedding = await embedText(message);
+const userEmbedding = await embedText(message);
 
-  // Find best match in KB with context awareness
-  const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext,0.85);
+// ============================================
+// 🤖 REASONING DETECTION (Force Gemini)
+// ============================================
+const lower = message.toLowerCase();
+let forceGemini = false;
+
+// 1. Eligibility with numbers (salary/age)
+if (/\b(earning|salary|earn|make|income)\s+\d|am\s+\d+\s+years|aged?\s+\d+/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 Eligibility calculation detected → Gemini");
+}
+
+// 2. "Can I get" or "Am I eligible" (eligibility questions)
+else if (/\b(can i get|am i eligible|do i qualify|can i apply)\b/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 Eligibility question detected → Gemini");
+}
+
+// 3. Comparisons (which/better/vs)
+else if (/\b(which|compare|better|vs|versus)\b.*\b(should|or|finance|loan)\b/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 Comparison detected → Gemini");
+}
+
+// 4. Why/How/Explain
+else if (/\b(why|how does|how do|explain|tell me about|difference between)\b/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 Explanation detected → Gemini");
+}
+
+// 5. DSR/EMI calculation keywords
+else if (/\b(dsr|debt|emi|emis|existing loan|current loan|monthly payment)\b/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 DSR/EMI calculation detected → Gemini");
+}
+
+// 6. Hypotheticals (what if)
+else if (/\b(what if|suppose|assuming|if i)\b/i.test(lower)) {
+  forceGemini = true;
+  console.log("🤖 Hypothetical scenario → Gemini");
+}
+
+// If reasoning required, skip KB and go straight to Gemini
+if (forceGemini) {
+  const top3Matches = findTop3Matches(userEmbedding, updatedContext);
+  const kbContext = top3Matches.length > 0 
+    ? `\n**RELEVANT KB ENTRIES:**\n${top3Matches.map(m => 
+        `- ${typeof m.response === 'function' ? '[Dynamic Response]' : m.response.substring(0, 300)}...`
+      ).join('\n')}\n`
+    : '';
+  
+  const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFdFF\uFE70-\uFEFF]/.test(message);
+  const currentLanguage = hasArabic ? "Arabic" : "English";
+  
+  let contextPrompt;
+  if (updatedContext && (updatedContext.nationality || updatedContext.product || updatedContext.recentMessages?.length)) {
+    contextPrompt = `${SYSTEM_PROMPT}
+${kbContext}
+**CONVERSATION CONTEXT:**
+${updatedContext.topic ? `- Current topic: ${updatedContext.topic}` : ''}
+${updatedContext.product ? `- Last product discussed: ${updatedContext.product}` : ''}
+${updatedContext.specificCorporateProduct ? `- Specific corporate product: ${updatedContext.specificCorporateProduct}` : ''}
+${updatedContext.nationality ? `- User nationality: ${updatedContext.nationality}` : ''}
+${updatedContext.recentMessages?.length ? `- Recent conversation:\n${updatedContext.recentMessages.map(m => `User: ${m.user}\nBot: ${m.bot}`).join('\n')}` : ''}
+
+**CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+**YOU MUST RESPOND IN: ${currentLanguage}**
+
+User message: ${message}`;
+  } else {
+    contextPrompt = `${SYSTEM_PROMPT}
+${kbContext}
+**CURRENT MESSAGE LANGUAGE: ${currentLanguage}**
+**YOU MUST RESPOND IN: ${currentLanguage}**
+
+User message: ${message}`;
+  }
+  
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+  });
+  
+  apiUsage.requestsToday++;
+  
+  const result = await model.generateContent(contextPrompt);
+  const parts = result.response.candidates?.[0]?.content?.parts || [];
+  const botReply = parts.map(p => p.text || "").join(" ").trim();
+  
+  console.log("Gemini reply (reasoning):", botReply);
+  
+  if (userId) {
+    sessionMemory.addToHistory(userId, message, botReply);
+  }
+  
+  return res.json({ interpretation: botReply });
+}
+
+// Find best match in KB with context awareness (only if NOT reasoning)
+const bestMatch = findBestMatchWithContext(userEmbedding, updatedContext, 0.85);
   if (bestMatch) {
     console.log("KB match:", bestMatch.triggers[0]);
     
